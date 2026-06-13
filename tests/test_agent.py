@@ -195,10 +195,7 @@ async def test_generate_summary_returns_text():
     from app.agent.nodes.summarizer import generate_summary
 
     summary_text = "The team discussed deployment and decided to ship by Friday."
-    with (
-        patch("app.agent.nodes.summarizer.ChatOpenAI", return_value=_mock_llm(summary_text)),
-        patch("app.agent.nodes.summarizer.generate_voice_summary", new=AsyncMock(return_value="")),
-    ):
+    with patch("app.agent.nodes.summarizer.ChatOpenAI", return_value=_mock_llm(summary_text)):
         result = await generate_summary(
             {
                 "topics": ["deployment"],
@@ -213,31 +210,7 @@ async def test_generate_summary_returns_text():
 async def test_generate_summary_handles_empty_state():
     from app.agent.nodes.summarizer import generate_summary
 
-    with (
-        patch("app.agent.nodes.summarizer.ChatOpenAI", return_value=_mock_llm("Short meeting.")),
-        patch("app.agent.nodes.summarizer.generate_voice_summary", new=AsyncMock(return_value="")),
-    ):
+    with patch("app.agent.nodes.summarizer.ChatOpenAI", return_value=_mock_llm("Short meeting.")):
         result = await generate_summary({"topics": [], "decisions": [], "approved_tickets": []})
 
     assert result["summary"] == "Short meeting."
-
-
-async def test_generate_summary_includes_voice_path():
-    from app.agent.nodes.summarizer import generate_summary
-
-    summary_text = "Sprint planning went well."
-    voice_path = "/tmp/summary_abc123.mp3"
-
-    with (
-        patch("app.agent.nodes.summarizer.ChatOpenAI", return_value=_mock_llm(summary_text)),
-        patch(
-            "app.agent.nodes.summarizer.generate_voice_summary",
-            new=AsyncMock(return_value=voice_path),
-        ),
-    ):
-        result = await generate_summary(
-            {"topics": ["sprint"], "decisions": ["ship Monday"], "approved_tickets": []}
-        )
-
-    assert result["summary"] == summary_text
-    assert result["voice_summary_path"] == voice_path

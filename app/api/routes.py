@@ -58,10 +58,7 @@ async def get_summary(bot_id: str, request: Request):
         raise HTTPException(status_code=503, detail="Agent not available")
     config = {"configurable": {"thread_id": bot_id}}
     state = await graph.aget_state(config)
-    return {
-        "summary": state.values.get("summary", ""),
-        "voice_summary_path": state.values.get("voice_summary_path", ""),
-    }
+    return {"summary": state.values.get("summary", "")}
 
 
 @router.post("/meetings/{bot_id}/approve")
@@ -83,7 +80,6 @@ async def approve_tickets(bot_id: str, payload: ApproveTicketsRequest, request: 
         if meeting:
             meeting.status = "completed"
             meeting.summary = final_state.get("summary", "")
-            meeting.voice_summary_path = final_state.get("voice_summary_path", "")
             await db.commit()
             logger.info(f"Meeting {bot_id} marked completed in DB")
 
@@ -163,7 +159,6 @@ async def _process_meeting(bot_id: str, app) -> None:
             "tickets": [],
             "approved_tickets": [],
             "summary": "",
-            "voice_summary_path": "",
         }
         config = {"configurable": {"thread_id": bot_id}}
         logger.info(f"[{bot_id}] Invoking LangGraph agent")

@@ -573,28 +573,6 @@ docs = ["pydoctor (>=25.4.0)"]
 test = ["pytest"]
 
 [[package]]
-name = "elevenlabs"
-version = "2.52.0"
-description = ""
-optional = false
-python-versions = "<4.0,>=3.8"
-files = [
-    {file = "elevenlabs-2.52.0-py3-none-any.whl", hash = "sha256:c9c8048431dadea691a1561b44e775240c012a1eaa84159d67a1ee935bed3b3f"},
-    {file = "elevenlabs-2.52.0.tar.gz", hash = "sha256:8cbb22418a9ff51251f5e524fe88505bd70be1c4c180b7ebe7998110c8330bee"},
-]
-
-[package.dependencies]
-httpx = ">=0.21.2"
-pydantic = ">=1.9.2"
-pydantic-core = ">=2.18.2"
-requests = ">=2.20"
-typing_extensions = ">=4.0.0"
-websockets = ">=11.0"
-
-[package.extras]
-pyaudio = ["pyaudio (>=0.2.14)"]
-
-[[package]]
 name = "fastapi"
 version = "0.136.3"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
@@ -3510,4 +3488,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "53540be316e0c43be4c919adfa755d6e7a4d070550b71588713753a0e7af3b65"
+content-hash = "7ea49d55379b3400608e8c1ba5cf0a87914694c9e1a50e2f1fa2798909e6ed5f"
