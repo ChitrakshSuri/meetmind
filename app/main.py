@@ -1,10 +1,16 @@
 import logging
+import os
 from contextlib import asynccontextmanager
+from app.config import settings
+
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
+os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from app.api.routes import router
-from app.config import settings
 from app.db.base import async_engine
 from app.db.models import Base
 from app.agent.graph import build_graph
