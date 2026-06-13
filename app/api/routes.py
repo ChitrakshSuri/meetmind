@@ -92,8 +92,9 @@ async def approve_tickets(bot_id: str, payload: ApproveTicketsRequest, request: 
 
 @router.post("/webhook/meetingbaas")
 async def meetingbaas_webhook(payload: dict, request: Request):
-    bot_id = payload.get("bot_id")
-    status = payload.get("status")
+    bot_id = payload.get("bot_id") or payload.get("data", {}).get("bot_id")
+    event = payload.get("event", "")
+    status = "completed" if event == "bot.completed" else payload.get("status") or payload.get("data", {}).get("status")
 
     if not bot_id:
         raise HTTPException(status_code=400, detail="Missing bot_id in payload")
