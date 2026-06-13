@@ -96,39 +96,90 @@ async def get_jira_metadata():
     project = settings.jira_project_key
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        assignees_r, priorities_r, issuetypes_r, labels_r, epics_r = await asyncio.gather(
+        board_r = await client.get(
+            f"{base}/rest/agile/1.0/board",
+            params={"projectKeyOrId": project},
+            headers=headers,
+        )
+        board_id = None
+        if not isinstance(board_r, Exception) and board_r.is_success:
+            boards = board_r.json().get("values", [])
+            if boards:
+                board_id = boards[0]["id"]
+
+        tasks = [
             client.get(f"{base}/rest/api/3/user/assignable/search",
                        params={"project": project, "maxResults": 50}, headers=headers),
             client.get(f"{base}/rest/api/3/priority", headers=headers),
             client.get(f"{base}/rest/api/3/issue/createmeta/{project}/issuetypes", headers=headers),
-            client.get(f"{base}/rest/api/3/label", params={"maxResults": 50}, headers=headers),
+            client.get(f"{base}/rest/api/3/label", params={"maxResults": 100}, headers=headers),
             client.get(f"{base}/rest/api/3/search",
                        params={"jql": f"project={project} AND issuetype=Epic ORDER BY created DESC",
-                               "maxResults": 20, "fields": "summary"},
+                               "maxResults": 20, "fields": "summary,status"},
                        headers=headers),
-        )
+            client.get(f"{base}/rest/api/3/project/{project}/statuses", headers=headers),
+        ]
+        if board_id:
+            tasks.append(
+                client.get(
+                    f"{base}/rest/agile/1.0/board/{board_id}/sprint",
+                    params={"state": "active,future", "maxResults": 10},
+                    headers=headers,
+                )
+            )
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    (assignees_r, priorities_r, issuetypes_r, labels_r, epics_r, statuses_r, *sprint_results) = results
+    sprints_r = sprint_results[0] if sprint_results else None
+
+    def ok(r):
+        return not isinstance(r, Exception) and getattr(r, "is_success", False)
+
+    seen_statuses: set[str] = set()
+    statuses = []
+    if ok(statuses_r):
+        for issue_type_block in statuses_r.json():
+            for s in issue_type_block.get("statuses", []):
+                if s["name"] not in seen_statuses:
+                    seen_statuses.add(s["name"])
+                    cat = s.get("statusCategory", {})
+                    statuses.append({
+                        "id": s["id"],
+                        "name": s["name"],
+                        "category": cat.get("name", ""),
+                        "categoryColor": cat.get("colorName", ""),
+                    })
 
     return {
         "assignees": [
             {"accountId": u["accountId"], "displayName": u["displayName"],
              "avatar": u.get("avatarUrls", {}).get("24x24", "")}
-            for u in (assignees_r.json() if assignees_r.is_success else [])
+            for u in (assignees_r.json() if ok(assignees_r) else [])
             if u.get("accountType") == "atlassian"
         ],
         "priorities": [
             {"id": p["id"], "name": p["name"]}
-            for p in (priorities_r.json() if priorities_r.is_success else [])
+            for p in (priorities_r.json() if ok(priorities_r) else [])
         ],
         "issue_types": [
-            {"id": t["id"], "name": t["name"]}
-            for t in (issuetypes_r.json().get("issueTypes", []) if issuetypes_r.is_success else [])
+            {"id": t["id"], "name": t["name"], "hierarchyLevel": t.get("hierarchyLevel", 0)}
+            for t in (issuetypes_r.json().get("issueTypes", []) if ok(issuetypes_r) else [])
             if not t.get("subtask")
         ],
-        "labels": (labels_r.json().get("values", []) if labels_r.is_success else []),
+        "labels": (labels_r.json().get("values", []) if ok(labels_r) else []),
         "epics": [
-            {"key": i["key"], "summary": i["fields"]["summary"]}
-            for i in (epics_r.json().get("issues", []) if epics_r.is_success else [])
+            {"key": i["key"], "summary": i["fields"]["summary"],
+             "status": i["fields"].get("status", {}).get("name", "")}
+            for i in (epics_r.json().get("issues", []) if ok(epics_r) else [])
         ],
+        "statuses": statuses,
+        "sprints": [
+            {"id": s["id"], "name": s["name"], "state": s["state"]}
+            for s in (sprints_r.json().get("values", []) if ok(sprints_r) else [])
+        ],
+        "board_id": board_id,
+        "project_key": project,
     }
 
 

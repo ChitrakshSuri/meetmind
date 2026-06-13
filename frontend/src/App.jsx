@@ -38,6 +38,7 @@ export default function App() {
   const [step, setStep] = useState(0)
   const [botId, setBotId] = useState(null)
   const [tickets, setTickets] = useState([])
+  const [ticketsPushed, setTicketsPushed] = useState(false)
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -72,10 +73,10 @@ export default function App() {
             <TicketReview
               botId={botId}
               tickets={tickets}
-              onComplete={() => setStep(3)}
+              onComplete={(pushed) => { setTicketsPushed(pushed); setStep(3) }}
             />
           )}
-          {step === 3 && <Summary botId={botId} />}
+          {step === 3 && <Summary botId={botId} ticketsPushed={ticketsPushed} />}
         </div>
       </main>
     </div>

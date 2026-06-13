@@ -81,6 +81,8 @@ async def push_to_jira(state: MeetingState) -> dict:
                 payload["fields"]["labels"] = ticket["labels"]
             if ticket.get("parent_epic"):
                 payload["fields"]["parent"] = {"key": ticket["parent_epic"]}
+            if ticket.get("sprint_id"):
+                payload["fields"]["customfield_10020"] = ticket["sprint_id"]
 
             try:
                 response = await client.post(

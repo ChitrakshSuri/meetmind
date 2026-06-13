@@ -21,10 +21,14 @@ const PRIORITY_ICON = {
 
 const META_FALLBACK = {
   assignees:   [],
-  priorities:  [{ id: '1', name: 'High' }, { id: '2', name: 'Medium' }, { id: '3', name: 'Low' }],
-  issue_types: [{ id: '1', name: 'Bug' }, { id: '2', name: 'Task' }],
+  priorities:  [],
+  issue_types: [],
   labels:      [],
   epics:       [],
+  statuses:    [],
+  sprints:     [],
+  board_id:    null,
+  project_key: '',
 }
 
 const INPUT_CLS = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500'
@@ -132,6 +136,7 @@ function EditPanel({ ticket, meta, onSave, onDelete, onClose }) {
     labels:              Array.isArray(ticket.labels) ? ticket.labels : [],
     due_date:            ticket.due_date || '',
     start_date:          ticket.start_date || '',
+    sprint_id:           ticket.sprint_id || null,
   })
   const [assigneeSearch, setAssigneeSearch] = useState(ticket.assignee || '')
   const [assigneeOpen, setAssigneeOpen] = useState(false)
@@ -190,42 +195,50 @@ function EditPanel({ ticket, meta, onSave, onDelete, onClose }) {
           {/* Issue Type */}
           <div>
             <label className={LABEL_CLS}>Issue Type</label>
-            <div className="grid grid-cols-2 gap-2">
-              {meta.issue_types.map((it) => (
-                <button
-                  key={it.id}
-                  onClick={() => set('ticket_type', it.name)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                    draft.ticket_type === it.name
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                  }`}
-                >
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${TYPE_DOT[it.name] || 'bg-gray-400'}`} />
-                  {it.name}
-                </button>
-              ))}
-            </div>
+            {meta.issue_types.length === 0 ? (
+              <p className="text-xs text-gray-400 py-1">None available</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {meta.issue_types.map((it) => (
+                  <button
+                    key={it.id}
+                    onClick={() => set('ticket_type', it.name)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                      draft.ticket_type === it.name
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${TYPE_DOT[it.name] || 'bg-gray-400'}`} />
+                    {it.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Priority */}
           <div>
             <label className={LABEL_CLS}>Priority</label>
-            <div className="flex flex-wrap gap-2">
-              {meta.priorities.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => set('priority', p.name)}
-                  className={`flex-1 min-w-[70px] flex items-center justify-center gap-1 px-2 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                    draft.priority === p.name
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                  }`}
-                >
-                  {PRIORITY_ICON[p.name] || '⚪'} {p.name}
-                </button>
-              ))}
-            </div>
+            {meta.priorities.length === 0 ? (
+              <p className="text-xs text-gray-400 py-1">None available</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {meta.priorities.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => set('priority', p.name)}
+                    className={`flex-1 min-w-[70px] flex items-center justify-center gap-1 px-2 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                      draft.priority === p.name
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    {PRIORITY_ICON[p.name] || '⚪'} {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Assignee */}
@@ -282,22 +295,28 @@ function EditPanel({ ticket, meta, onSave, onDelete, onClose }) {
             )}
           </div>
 
-          {/* Parent Epic */}
-          {meta.epics.length > 0 && (
-            <div>
-              <label className={LABEL_CLS}>Parent Epic</label>
-              <select
-                value={draft.parent_epic}
-                onChange={(e) => set('parent_epic', e.target.value)}
-                className={INPUT_CLS}
-              >
-                <option value="">None</option>
-                {meta.epics.map((ep) => (
-                  <option key={ep.key} value={ep.key}>{ep.key}: {ep.summary}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Parent Epic — hidden for Epic-level issue types */}
+          {(() => {
+            const selectedType = meta.issue_types.find((it) => it.name === draft.ticket_type)
+            const isEpicLevel = selectedType ? (selectedType.hierarchyLevel ?? 0) >= 1 : false
+            return meta.epics.length > 0 && !isEpicLevel ? (
+              <div>
+                <label className={LABEL_CLS}>Parent Epic</label>
+                <select
+                  value={draft.parent_epic}
+                  onChange={(e) => set('parent_epic', e.target.value)}
+                  className={INPUT_CLS}
+                >
+                  <option value="">None</option>
+                  {meta.epics.map((ep) => (
+                    <option key={ep.key} value={ep.key}>
+                      {ep.key}: {ep.summary}{ep.status ? ` (${ep.status})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null
+          })()}
 
           {/* Labels */}
           <div>
@@ -311,6 +330,25 @@ function EditPanel({ ticket, meta, onSave, onDelete, onClose }) {
               onChange={(labels) => set('labels', labels)}
             />
           </div>
+
+          {/* Sprint */}
+          {meta.sprints.length > 0 && (
+            <div>
+              <label className={LABEL_CLS}>Sprint</label>
+              <select
+                value={draft.sprint_id ?? ''}
+                onChange={(e) => set('sprint_id', e.target.value ? Number(e.target.value) : null)}
+                className={INPUT_CLS}
+              >
+                <option value="">No Sprint</option>
+                {meta.sprints.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.state === 'active' ? '▶ ' : ''}{s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Start Date + Due Date */}
           <div className="grid grid-cols-2 gap-3">
@@ -463,12 +501,12 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
         botId,
         approved.map((t) => t.id),
         approved.map(({ id, title, description, ticket_type, priority, assignee,
-                        assignee_account_id, due_date, start_date, labels, parent_epic }) => ({
+                        assignee_account_id, due_date, start_date, labels, parent_epic, sprint_id }) => ({
           id, title, description, ticket_type, priority, assignee,
-          assignee_account_id, due_date, start_date, labels, parent_epic,
+          assignee_account_id, due_date, start_date, labels, parent_epic, sprint_id,
         }))
       )
-      onComplete()
+      onComplete(true)
     } catch (err) {
       showToast(err.response?.data?.detail || err.message || 'Failed to push tickets to Jira')
     } finally {
@@ -532,7 +570,7 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
 
         {approvedCount === 0 && (
           <button
-            onClick={onComplete}
+            onClick={() => onComplete(false)}
             className="w-full border border-gray-300 hover:border-gray-400 text-gray-600 font-semibold rounded-lg px-6 py-3 transition-colors text-sm"
           >
             End without pushing to Jira →

@@ -56,11 +56,11 @@ function Spinner() {
   )
 }
 
-export default function Summary({ botId }) {
+export default function Summary({ botId, ticketsPushed }) {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showConfetti, setShowConfetti] = useState(true)
+  const [showConfetti, setShowConfetti] = useState(ticketsPushed)
 
   useEffect(() => {
     getSummary(botId)
@@ -68,19 +68,22 @@ export default function Summary({ botId }) {
       .catch((err) => setError(err.response?.data?.detail || err.message || 'Failed to load summary'))
       .finally(() => setLoading(false))
 
+    if (!ticketsPushed) return
     const timer = setTimeout(() => setShowConfetti(false), 4000)
     return () => clearTimeout(timer)
-  }, [botId])
+  }, [botId, ticketsPushed])
 
   return (
     <>
       {showConfetti && <Confetti />}
 
       <div className="bg-white rounded-2xl shadow-md p-8 text-center">
-        <div className="text-5xl mb-3">🎉</div>
+        <div className="text-5xl mb-3">{ticketsPushed ? '🎉' : '✅'}</div>
         <h2 className="text-2xl font-bold text-gray-800 mb-1">All done!</h2>
         <p className="text-gray-500 text-sm mb-6">
-          ✅ Your tickets have been pushed to Jira successfully.
+          {ticketsPushed
+            ? '✅ Your tickets have been pushed to Jira successfully.'
+            : 'Meeting processed. No tickets were pushed to Jira.'}
         </p>
 
         {loading && (
@@ -103,14 +106,16 @@ export default function Summary({ botId }) {
         )}
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href="https://chitrakshsworkspace-40359508.atlassian.net/jira/software/projects/KAN/boards/1"
-            target="_blank"
-            rel="noreferrer"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-2.5 transition-colors text-sm inline-flex items-center justify-center gap-1.5"
-          >
-            View Jira Board →
-          </a>
+          {ticketsPushed && (
+            <a
+              href="https://chitrakshsworkspace-40359508.atlassian.net/jira/software/projects/KAN/boards/1"
+              target="_blank"
+              rel="noreferrer"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-2.5 transition-colors text-sm inline-flex items-center justify-center gap-1.5"
+            >
+              View Jira Board →
+            </a>
+          )}
           <button
             onClick={() => window.location.reload()}
             className="border border-gray-300 hover:border-gray-400 text-gray-700 font-semibold rounded-lg px-6 py-2.5 transition-colors text-sm"

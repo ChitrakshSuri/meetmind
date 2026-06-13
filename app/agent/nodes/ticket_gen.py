@@ -84,6 +84,8 @@ async def generate_tickets(state: MeetingState) -> dict:
                     "labels": [],
                     "parent_epic": None,
                     "assignee_account_id": None,
+                    "sprint_id": None,
+                    "status": "To Do",
                     "approved": None,
                 }
             )
