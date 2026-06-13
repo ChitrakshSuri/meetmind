@@ -23,7 +23,7 @@ Respond ONLY with valid JSON — no markdown, no preamble.
 Rules:
 - title: imperative verb phrase, max ~60 chars (e.g. "Fix memory leak on production server")
 - description: 1-3 sentences with enough context for the developer to start work immediately
-- ticket_type: Bug if it's a defect/regression, Story if it's a new feature or user-facing change, Task for everything else
+- ticket_type: Bug if it's a defect/regression, Task for everything else
 - priority: High if it blocks others or has a near-term deadline, Low if it's nice-to-have, Medium otherwise
 - assignee: use the name from the action item, or "Unassigned"
 
@@ -52,12 +52,15 @@ async def generate_tickets(state: MeetingState) -> dict:
         data = json.loads(_clean_json(response.content))
         tickets = []
         for t in data.get("tickets", []):
+            ticket_type = t.get("ticket_type", "Task")
+            if ticket_type not in ("Bug", "Task"):
+                ticket_type = "Task"
             tickets.append(
                 {
                     "id": uuid.uuid4().hex[:8],
                     "title": t.get("title", ""),
                     "description": t.get("description", ""),
-                    "ticket_type": t.get("ticket_type", "Task"),
+                    "ticket_type": ticket_type,
                     "priority": t.get("priority", "Medium"),
                     "assignee": t.get("assignee", "Unassigned"),
                     "approved": None,
