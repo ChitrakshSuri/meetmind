@@ -71,12 +71,16 @@ async def push_to_jira(state: MeetingState) -> dict:
                     "issuetype": {"id": resolved_id},
                 }
             }
-            if ticket.get("assignee") and ticket["assignee"] != "Unassigned":
+            if ticket.get("assignee_account_id"):
+                payload["fields"]["assignee"] = {"id": ticket["assignee_account_id"]}
+            elif ticket.get("assignee") and ticket["assignee"] != "Unassigned":
                 payload["fields"]["assignee"] = {"name": ticket["assignee"]}
             if ticket.get("due_date"):
                 payload["fields"]["duedate"] = ticket["due_date"]
             if ticket.get("labels"):
                 payload["fields"]["labels"] = ticket["labels"]
+            if ticket.get("parent_epic"):
+                payload["fields"]["parent"] = {"key": ticket["parent_epic"]}
 
             try:
                 response = await client.post(

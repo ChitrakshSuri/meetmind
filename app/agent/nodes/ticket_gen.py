@@ -80,7 +80,10 @@ async def generate_tickets(state: MeetingState) -> dict:
                     "priority": t.get("priority", "Medium"),
                     "assignee": t.get("assignee", "Unassigned"),
                     "due_date": None,
+                    "start_date": None,
                     "labels": [],
+                    "parent_epic": None,
+                    "assignee_account_id": None,
                     "approved": None,
                 }
             )
