@@ -6,6 +6,16 @@ from app.agent.state import MeetingState
 
 logger = logging.getLogger(__name__)
 
+
+def _clean_json(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+    return text.strip()
+
+
 _PROMPT = """Extract every action item from this meeting transcript.
 Respond ONLY with valid JSON — no markdown, no preamble.
 
@@ -31,7 +41,7 @@ async def extract_action_items(state: MeetingState) -> dict:
         [HumanMessage(content=_PROMPT.format(transcript=state["transcript"]))]
     )
     try:
-        data = json.loads(response.content)
+        data = json.loads(_clean_json(response.content))
         return {"action_items": data.get("action_items", [])}
     except (json.JSONDecodeError, AttributeError) as e:
         logger.error(f"Failed to parse extractor response: {e}\nRaw: {response.content!r}")

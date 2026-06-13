@@ -7,6 +7,16 @@ from app.agent.state import MeetingState
 
 logger = logging.getLogger(__name__)
 
+
+def _clean_json(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+    return text.strip()
+
+
 _PROMPT = """Convert these action items into Jira tickets.
 Respond ONLY with valid JSON — no markdown, no preamble.
 
@@ -39,7 +49,7 @@ async def generate_tickets(state: MeetingState) -> dict:
         ]
     )
     try:
-        data = json.loads(response.content)
+        data = json.loads(_clean_json(response.content))
         tickets = []
         for t in data.get("tickets", []):
             tickets.append(

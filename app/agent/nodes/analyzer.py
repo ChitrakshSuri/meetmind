@@ -6,6 +6,16 @@ from app.agent.state import MeetingState
 
 logger = logging.getLogger(__name__)
 
+
+def _clean_json(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+    return text.strip()
+
+
 _PROMPT = """Analyze this meeting transcript and respond ONLY with valid JSON — no markdown, no preamble.
 
 Rules:
@@ -29,7 +39,7 @@ async def analyze_meeting(state: MeetingState) -> dict:
         [HumanMessage(content=_PROMPT.format(transcript=state["transcript"]))]
     )
     try:
-        data = json.loads(response.content)
+        data = json.loads(_clean_json(response.content))
         return {
             "meeting_type": data.get("meeting_type", "planning"),
             "topics": data.get("topics", []),
