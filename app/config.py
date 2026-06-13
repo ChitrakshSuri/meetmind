@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     webhook_base_url: str = "http://localhost:8000"
 
-    model_config = {"env_file": ".env"}
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()
