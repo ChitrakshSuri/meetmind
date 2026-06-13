@@ -6,6 +6,8 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+_issue_type_cache: dict | None = None
+
 
 def _basic_auth() -> str:
     raw = f"{settings.atlassian_email}:{settings.atlassian_api_token}"
@@ -25,22 +27,48 @@ def _adf_paragraph(text: str) -> dict:
     }
 
 
+async def get_issue_type_map() -> dict:
+    global _issue_type_cache
+    if _issue_type_cache is not None:
+        return _issue_type_cache
+
+    url = f"{settings.atlassian_base_url}/rest/api/3/issue/createmeta/{settings.jira_project_key}/issuetypes"
+    headers = {
+        "Authorization": f"Basic {_basic_auth()}",
+        "Accept": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, headers=headers)
+        response.raise_for_status()
+        issue_types = response.json().get("issueTypes", [])
+
+    type_map = {it["name"]: it["id"] for it in issue_types}
+    if "Bug" not in type_map and "Task" in type_map:
+        type_map["Bug"] = type_map["Task"]
+
+    _issue_type_cache = type_map
+    return _issue_type_cache
+
+
 async def push_to_jira(state: MeetingState) -> dict:
     headers = {
         "Authorization": f"Basic {_basic_auth()}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+    issue_type_map = await get_issue_type_map()
+    task_id = issue_type_map.get("Task")
+
     results = []
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         for ticket in state["approved_tickets"]:
+            resolved_id = issue_type_map.get(ticket["ticket_type"], task_id)
             payload: dict = {
                 "fields": {
                     "project": {"key": settings.jira_project_key},
                     "summary": ticket["title"],
                     "description": _adf_paragraph(ticket["description"]),
-                    "issuetype": {"name": ticket["ticket_type"]},
-                    "priority": {"name": ticket["priority"]},
+                    "issuetype": {"id": resolved_id},
                 }
             }
             if ticket.get("assignee") and ticket["assignee"] != "Unassigned":
