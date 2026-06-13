@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "meetmind"
+version = "0.1.0"
+description = "AI meeting assistant with LangGraph"
+authors = ["Chitraksh Suri <chitrakshsuri2005@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.136.3"
+uvicorn = "^0.49.0"
+python-dotenv = "^1.2.2"
+pydantic = "^2.13.4"
+pydantic-settings = "^2.14.1"
+langchain = "^1.3.9"
+langgraph = "^1.2.5"
+langchain-anthropic = "^1.4.6"
+deepgram-sdk = "^7.3.1"
+elevenlabs = "^2.52.0"
+httpx = "^0.28.1"
+langchain-community = "^0.4.2"
+langchain-openai = "^1.3.2"
+openai = "^2.41.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
