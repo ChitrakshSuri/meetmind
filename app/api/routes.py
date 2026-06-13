@@ -89,21 +89,47 @@ async def approve_tickets(bot_id: str, payload: ApproveTicketsRequest, request: 
     return {"status": "pipeline_complete"}
 
 
-@router.get("/jira/assignees")
-async def get_jira_assignees():
-    headers = {
-        "Authorization": f"Basic {_basic_auth()}",
-        "Accept": "application/json",
-    }
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
-            f"{settings.atlassian_base_url}/rest/api/3/user/assignable/search",
-            params={"project": settings.jira_project_key},
-            headers=headers,
+@router.get("/jira/metadata")
+async def get_jira_metadata():
+    headers = {"Authorization": f"Basic {_basic_auth()}", "Accept": "application/json"}
+    base = settings.atlassian_base_url
+    project = settings.jira_project_key
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        assignees_r, priorities_r, issuetypes_r, labels_r, epics_r = await asyncio.gather(
+            client.get(f"{base}/rest/api/3/user/assignable/search",
+                       params={"project": project, "maxResults": 50}, headers=headers),
+            client.get(f"{base}/rest/api/3/priority", headers=headers),
+            client.get(f"{base}/rest/api/3/issue/createmeta/{project}/issuetypes", headers=headers),
+            client.get(f"{base}/rest/api/3/label", params={"maxResults": 50}, headers=headers),
+            client.get(f"{base}/rest/api/3/search",
+                       params={"jql": f"project={project} AND issuetype=Epic ORDER BY created DESC",
+                               "maxResults": 20, "fields": "summary"},
+                       headers=headers),
         )
-        if not response.is_success:
-            return []
-        return response.json()
+
+    return {
+        "assignees": [
+            {"accountId": u["accountId"], "displayName": u["displayName"],
+             "avatar": u.get("avatarUrls", {}).get("24x24", "")}
+            for u in (assignees_r.json() if assignees_r.is_success else [])
+            if u.get("accountType") == "atlassian"
+        ],
+        "priorities": [
+            {"id": p["id"], "name": p["name"]}
+            for p in (priorities_r.json() if priorities_r.is_success else [])
+        ],
+        "issue_types": [
+            {"id": t["id"], "name": t["name"]}
+            for t in (issuetypes_r.json().get("issueTypes", []) if issuetypes_r.is_success else [])
+            if not t.get("subtask")
+        ],
+        "labels": (labels_r.json().get("values", []) if labels_r.is_success else []),
+        "epics": [
+            {"key": i["key"], "summary": i["fields"]["summary"]}
+            for i in (epics_r.json().get("issues", []) if epics_r.is_success else [])
+        ],
+    }
 
 
 @router.post("/webhook/meetingbaas")
