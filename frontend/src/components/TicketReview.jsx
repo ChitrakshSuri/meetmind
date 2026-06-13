@@ -31,6 +31,7 @@ function TicketCard({ ticket, onToggle, onEdit }) {
     ticket_type: ticket.ticket_type,
     priority: ticket.priority,
     assignee: ticket.assignee,
+    due_date: ticket.due_date || '',
   })
 
   function openEdit() {
@@ -40,6 +41,7 @@ function TicketCard({ ticket, onToggle, onEdit }) {
       ticket_type: ticket.ticket_type,
       priority: ticket.priority,
       assignee: ticket.assignee,
+      due_date: ticket.due_date || '',
     })
     setEditing(true)
   }
@@ -60,7 +62,7 @@ function TicketCard({ ticket, onToggle, onEdit }) {
     : 'border-gray-200 bg-gray-50 opacity-60'
 
   return (
-    <div className={`border rounded-xl p-4 transition-all ${cardBorder}`}>
+    <div className={`group border rounded-xl p-4 transition-all ${cardBorder}`}>
       {/* Approve toggle — always visible */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
@@ -127,14 +129,25 @@ function TicketCard({ ticket, onToggle, onEdit }) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-0.5">Assignee</label>
-            <input
-              value={draft.assignee}
-              onChange={(e) => setDraft((d) => ({ ...d, assignee: e.target.value }))}
-              placeholder="Unassigned"
-              className="w-full border border-blue-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Assignee</label>
+              <input
+                value={draft.assignee}
+                onChange={(e) => setDraft((d) => ({ ...d, assignee: e.target.value }))}
+                placeholder="Unassigned"
+                className="w-full border border-blue-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Due Date</label>
+              <input
+                type="date"
+                value={draft.due_date}
+                onChange={(e) => setDraft((d) => ({ ...d, due_date: e.target.value }))}
+                className="w-full border border-blue-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
           </div>
 
           <div className="flex gap-2 pt-1">
@@ -183,12 +196,13 @@ function TicketCard({ ticket, onToggle, onEdit }) {
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500">
-              👤 {ticket.assignee || 'Unassigned'}
-            </span>
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              <span>👤 {ticket.assignee || 'Unassigned'}</span>
+              {ticket.due_date && <span>📅 {ticket.due_date}</span>}
+            </div>
             <button
               onClick={openEdit}
-              className="text-xs text-gray-400 hover:text-indigo-600 font-medium transition-colors"
+              className="opacity-0 group-hover:opacity-100 text-xs text-gray-400 hover:text-indigo-600 font-medium transition-all"
             >
               ✏️ Edit
             </button>
@@ -225,13 +239,14 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
       await approveTickets(
         botId,
         approved.map((t) => t.id),
-        approved.map(({ id, title, description, ticket_type, priority, assignee }) => ({
+        approved.map(({ id, title, description, ticket_type, priority, assignee, due_date }) => ({
           id,
           title,
           description,
           ticket_type,
           priority,
           assignee,
+          due_date,
         }))
       )
       onComplete()
@@ -263,19 +278,31 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
         </div>
       )}
 
-      <button
-        onClick={handleSubmit}
-        disabled={loading || approvedCount === 0}
-        className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold rounded-lg px-6 py-3 flex items-center justify-center gap-2 transition-colors"
-      >
-        {loading ? (
-          <>
-            <Spinner /> Pushing to Jira...
-          </>
-        ) : (
-          `Push ${approvedCount} ticket${approvedCount !== 1 ? 's' : ''} to Jira →`
-        )}
-      </button>
+      {approvedCount === 0 ? (
+        <div className="space-y-2">
+          <p className="text-center text-sm text-gray-500">All tickets rejected — nothing will be pushed to Jira.</p>
+          <button
+            onClick={onComplete}
+            className="w-full border border-gray-300 hover:border-gray-400 text-gray-600 font-semibold rounded-lg px-6 py-3 transition-colors"
+          >
+            End without pushing to Jira →
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold rounded-lg px-6 py-3 flex items-center justify-center gap-2 transition-colors"
+        >
+          {loading ? (
+            <>
+              <Spinner /> Pushing to Jira...
+            </>
+          ) : (
+            `Push ${approvedCount} ticket${approvedCount !== 1 ? 's' : ''} to Jira →`
+          )}
+        </button>
+      )}
     </div>
   )
 }
