@@ -2,6 +2,7 @@ import logging
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from app.agent.state import MeetingState
+from app.tools.voice_output import generate_voice_summary
 
 logger = logging.getLogger(__name__)
 
@@ -40,4 +41,6 @@ async def generate_summary(state: MeetingState) -> dict:
             )
         ]
     )
-    return {"summary": response.content.strip()}
+    summary = response.content.strip()
+    voice_summary_path = await generate_voice_summary(summary)
+    return {"summary": summary, "voice_summary_path": voice_summary_path}

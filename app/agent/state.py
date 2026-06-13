@@ -14,3 +14,4 @@ class MeetingState(TypedDict):
     tickets: list[dict]
     approved_tickets: list[dict]
     summary: str
+    voice_summary_path: str

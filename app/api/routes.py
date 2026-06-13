@@ -50,17 +50,42 @@ async def get_tickets(bot_id: str, request: Request):
     return {"tickets": state.values.get("tickets", [])}
 
 
+@router.get("/meetings/{bot_id}/summary")
+async def get_summary(bot_id: str, request: Request):
+    graph = get_graph(request.app)
+    if graph is None:
+        raise HTTPException(status_code=503, detail="Agent not available")
+    config = {"configurable": {"thread_id": bot_id}}
+    state = await graph.aget_state(config)
+    return {
+        "summary": state.values.get("summary", ""),
+        "voice_summary_path": state.values.get("voice_summary_path", ""),
+    }
+
+
 @router.post("/meetings/{bot_id}/approve")
 async def approve_tickets(bot_id: str, payload: ApproveTicketsRequest, request: Request):
     graph = get_graph(request.app)
     if graph is None:
         raise HTTPException(status_code=503, detail="Agent not available")
+
     config = {"configurable": {"thread_id": bot_id}}
     human_decision = {
         "approved_ids": payload.approved_ids,
         "edited_tickets": payload.edited_tickets,
     }
-    await graph.ainvoke(Command(resume=human_decision), config=config)
+    final_state = await graph.ainvoke(Command(resume=human_decision), config=config)
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Meeting).where(Meeting.bot_id == bot_id))
+        meeting = result.scalar_one_or_none()
+        if meeting:
+            meeting.status = "completed"
+            meeting.summary = final_state.get("summary", "")
+            meeting.voice_summary_path = final_state.get("voice_summary_path", "")
+            await db.commit()
+            logger.info(f"Meeting {bot_id} marked completed in DB")
+
     return {"status": "pipeline_complete"}
 
 
@@ -124,6 +149,7 @@ async def _process_meeting(bot_id: str, app) -> None:
             "tickets": [],
             "approved_tickets": [],
             "summary": "",
+            "voice_summary_path": "",
         }
         config = {"configurable": {"thread_id": bot_id}}
         await graph.ainvoke(initial_state, config=config)
