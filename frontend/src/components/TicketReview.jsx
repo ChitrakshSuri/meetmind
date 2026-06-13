@@ -138,21 +138,16 @@ function EditPanel({ ticket, meta, onSave, onDelete, onClose }) {
     start_date:          ticket.start_date || '',
     sprint_id:           ticket.sprint_id || null,
   })
-  const [assigneeSearch, setAssigneeSearch] = useState(ticket.assignee || '')
-  const [assigneeOpen, setAssigneeOpen] = useState(false)
-  const assigneeRef = useRef(null)
+  const [assigneeSearch, setAssigneeSearch] = useState(draft.assignee || '')
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
 
   useEffect(() => {
-    function handle(e) {
-      if (assigneeRef.current && !assigneeRef.current.contains(e.target)) setAssigneeOpen(false)
+    const handler = (e) => {
+      if (!e.target.closest('.assignee-dropdown-container')) setShowAssigneeDropdown(false)
     }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
   }, [])
-
-  const filteredAssignees = meta.assignees.filter((a) =>
-    a.displayName?.toLowerCase().includes(assigneeSearch.toLowerCase())
-  )
 
   function set(key, val) { setDraft((d) => ({ ...d, [key]: val })) }
 
@@ -242,56 +237,58 @@ function EditPanel({ ticket, meta, onSave, onDelete, onClose }) {
           </div>
 
           {/* Assignee */}
-          <div>
+          <div className="assignee-dropdown-container relative">
             <label className={LABEL_CLS}>Assignee</label>
-            {meta.assignees.length > 0 ? (
-              <div className="relative" ref={assigneeRef}>
-                <input
-                  value={assigneeSearch}
-                  onChange={(e) => {
-                    setAssigneeSearch(e.target.value)
-                    set('assignee', e.target.value)
+            <input
+              type="text"
+              placeholder="Search assignee…"
+              value={assigneeSearch}
+              onChange={(e) => setAssigneeSearch(e.target.value)}
+              onFocus={() => setShowAssigneeDropdown(true)}
+              className={INPUT_CLS}
+            />
+            {showAssigneeDropdown && (
+              <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+                <button
+                  onClick={() => {
+                    set('assignee', 'Unassigned')
                     set('assignee_account_id', null)
-                    setAssigneeOpen(true)
+                    setAssigneeSearch('')
+                    setShowAssigneeDropdown(false)
                   }}
-                  onFocus={() => setAssigneeOpen(true)}
-                  placeholder="Search by name…"
-                  className={INPUT_CLS}
-                />
-                {assigneeOpen && filteredAssignees.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-44 overflow-y-auto">
-                    {filteredAssignees.map((u) => (
-                      <button
-                        key={u.accountId}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                          set('assignee', u.displayName)
-                          set('assignee_account_id', u.accountId)
-                          setAssigneeSearch(u.displayName)
-                          setAssigneeOpen(false)
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 text-sm text-left"
-                      >
-                        {u.avatar ? (
-                          <img src={u.avatar} className="w-6 h-6 rounded-full shrink-0" alt="" />
-                        ) : (
-                          <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold shrink-0">
-                            {u.displayName?.[0] ?? '?'}
-                          </span>
-                        )}
-                        <span className="text-gray-800">{u.displayName}</span>
-                      </button>
-                    ))}
-                  </div>
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm text-left"
+                >
+                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs shrink-0">?</div>
+                  <span className="text-gray-600">Unassigned</span>
+                </button>
+                {meta.assignees
+                  .filter((a) => a.displayName.toLowerCase().includes(assigneeSearch.toLowerCase()))
+                  .map((a) => (
+                    <button
+                      key={a.accountId}
+                      onClick={() => {
+                        set('assignee', a.displayName)
+                        set('assignee_account_id', a.accountId)
+                        setAssigneeSearch(a.displayName)
+                        setShowAssigneeDropdown(false)
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 text-sm text-left"
+                    >
+                      <img
+                        src={a.avatar}
+                        alt={a.displayName}
+                        className="w-6 h-6 rounded-full shrink-0"
+                        onError={(e) => { e.target.style.display = 'none' }}
+                      />
+                      <span className="text-gray-800">{a.displayName}</span>
+                    </button>
+                  ))}
+                {meta.assignees.filter((a) =>
+                  a.displayName.toLowerCase().includes(assigneeSearch.toLowerCase())
+                ).length === 0 && (
+                  <p className="text-xs text-gray-400 px-3 py-2">No assignees found</p>
                 )}
               </div>
-            ) : (
-              <input
-                value={draft.assignee}
-                onChange={(e) => set('assignee', e.target.value)}
-                placeholder="Unassigned"
-                className={INPUT_CLS}
-              />
             )}
           </div>
 
