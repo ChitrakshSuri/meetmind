@@ -16,3 +16,8 @@ class MeetingStatusResponse(BaseModel):
     bot_id: str
     status: str
     transcript: Optional[str] = None
+
+
+class ApproveTicketsRequest(BaseModel):
+    approved_ids: list[str]
+    edited_tickets: list[dict] = []

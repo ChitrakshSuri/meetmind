@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""
     atlassian_mcp_url: str = "https://mcp.atlassian.com/v1/mcp"
+    atlassian_base_url: str = ""
     atlassian_api_token: str = ""
     atlassian_email: str = ""
     jira_project_key: str = ""
