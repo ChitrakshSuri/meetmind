@@ -27,6 +27,6 @@ export function getSummary(botId) {
   return api.get(`/api/v1/meetings/${botId}/summary`)
 }
 
-export function getAssignees() {
-  return api.get('/api/v1/jira/assignees')
+export function getJiraMetadata() {
+  return api.get('/api/v1/jira/metadata')
 }
