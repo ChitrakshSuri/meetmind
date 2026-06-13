@@ -1,8 +1,11 @@
 import asyncio
 import logging
 import traceback
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
+from app.config import settings
+from app.agent.nodes.jira_push import _basic_auth
 from app.api.schemas import (
     StartMeetingRequest,
     StartMeetingResponse,
@@ -84,6 +87,23 @@ async def approve_tickets(bot_id: str, payload: ApproveTicketsRequest, request: 
             logger.info(f"Meeting {bot_id} marked completed in DB")
 
     return {"status": "pipeline_complete"}
+
+
+@router.get("/jira/assignees")
+async def get_jira_assignees():
+    headers = {
+        "Authorization": f"Basic {_basic_auth()}",
+        "Accept": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"{settings.atlassian_base_url}/rest/api/3/user/assignable/search",
+            params={"project": settings.jira_project_key},
+            headers=headers,
+        )
+        if not response.is_success:
+            return []
+        return response.json()
 
 
 @router.post("/webhook/meetingbaas")

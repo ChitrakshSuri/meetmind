@@ -73,6 +73,10 @@ async def push_to_jira(state: MeetingState) -> dict:
             }
             if ticket.get("assignee") and ticket["assignee"] != "Unassigned":
                 payload["fields"]["assignee"] = {"name": ticket["assignee"]}
+            if ticket.get("due_date"):
+                payload["fields"]["duedate"] = ticket["due_date"]
+            if ticket.get("labels"):
+                payload["fields"]["labels"] = ticket["labels"]
 
             try:
                 response = await client.post(
