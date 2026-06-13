@@ -5,7 +5,7 @@ MEETINGBAAS_URL = "https://api.meetingbaas.com/v2"
 
 
 async def send_bot_to_meeting(meeting_url: str, bot_name: str = "MeetMind AI") -> str:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             f"{MEETINGBAAS_URL}/bots",
             headers={
@@ -26,7 +26,7 @@ async def send_bot_to_meeting(meeting_url: str, bot_name: str = "MeetMind AI") -
 
 
 async def get_meeting_data(bot_id: str) -> dict:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(
             f"{MEETINGBAAS_URL}/bots/{bot_id}",
             headers={"x-meeting-baas-api-key": settings.meetingbaas_api_key},
@@ -36,10 +36,24 @@ async def get_meeting_data(bot_id: str) -> dict:
 
 
 async def fetch_transcript(transcript_url: str) -> list:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(transcript_url)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+
+        # MeetingBaaS Gladia format:
+        # {"bot_id": "...", "provider": "gladia", "result": {"utterances": [...]}}
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            utterances = (
+                data.get("result", {}).get("utterances")
+                or data.get("utterances")
+                or data.get("segments")
+                or []
+            )
+            return utterances
+        return []
 
 
 async def build_transcript_text(bot_id: str) -> str:
@@ -52,7 +66,8 @@ async def build_transcript_text(bot_id: str) -> str:
 
     lines = []
     for segment in transcript_data:
-        speaker = segment.get("speaker", "Unknown")
+        # Gladia utterances use "speaker" key
+        speaker = segment.get("speaker", segment.get("channel", "Unknown"))
         text = segment.get("text", "").strip()
         if text:
             lines.append(f"{speaker}: {text}")
