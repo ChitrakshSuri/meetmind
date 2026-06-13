@@ -52,7 +52,9 @@ async def push_to_jira(state: MeetingState) -> dict:
                     headers=headers,
                     json=payload,
                 )
-                response.raise_for_status()
+                if not response.is_success:
+                    logger.error(f"Jira API error {response.status_code}: {response.text}")
+                    response.raise_for_status()
                 jira_key = response.json()["key"]
                 logger.info(f"Created Jira ticket {jira_key} for '{ticket['title']}'")
                 results.append({**ticket, "jira_key": jira_key})
