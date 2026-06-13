@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql+asyncpg://meetmind:meetmind@postgres:5432/meetmind
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: meetmind
+      POSTGRES_USER: meetmind
+      POSTGRES_PASSWORD: meetmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

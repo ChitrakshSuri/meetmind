@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
     langchain_project: str = "meetmind"
+    database_url: str = "postgresql+asyncpg://meetmind:meetmind@localhost:5432/meetmind"
     app_port: int = 8000
     frontend_url: str = "http://localhost:3000"
 
