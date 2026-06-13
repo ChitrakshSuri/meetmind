@@ -7,53 +7,98 @@ const STATUS_MESSAGES = {
   in_call_not_recording: '🤖 Bot has joined, waiting to record...',
   in_call_recording: '🔴 Recording in progress',
   recording_succeeded: '⚙️ Processing recording...',
-  completed: '⚙️ Processing recording...',
+  completed: '⚙️ AI is analyzing your meeting...',
   agent_running: '⚙️ AI is analyzing your meeting...',
 }
 
+const TICKET_BACKOFF = [10000, 15000, 20000, 30000]
+const MAX_TICKET_WAIT_MS = 5 * 60 * 1000
+
 export default function StatusPoller({ botId, onTicketsReady }) {
   const [statusMsg, setStatusMsg] = useState('🤖 Connecting...')
-  const [phase, setPhase] = useState('status')
-  const phaseRef = useRef('status')
-  const intervalRef = useRef(null)
+  const [error, setError] = useState(null)
+  const timeoutRef = useRef(null)
+  const startTimeRef = useRef(null)
+  const backoffIndexRef = useRef(0)
+  const stoppedRef = useRef(false)
 
   useEffect(() => {
-    phaseRef.current = phase
-  }, [phase])
+    stoppedRef.current = false
+    startTimeRef.current = null
+    backoffIndexRef.current = 0
 
-  useEffect(() => {
-    async function poll() {
-      if (phaseRef.current === 'status') {
+    function scheduleTicketPoll() {
+      if (stoppedRef.current) return
+
+      const elapsed = Date.now() - startTimeRef.current
+      if (elapsed >= MAX_TICKET_WAIT_MS) {
+        setError('Taking longer than expected. Please refresh.')
+        return
+      }
+
+      const delay = TICKET_BACKOFF[Math.min(backoffIndexRef.current, TICKET_BACKOFF.length - 1)]
+
+      timeoutRef.current = setTimeout(async () => {
+        if (stoppedRef.current) return
+        try {
+          const res = await getTickets(botId)
+          const tickets = res.data.tickets || []
+          if (tickets.length > 0) {
+            stoppedRef.current = true
+            onTicketsReady(tickets)
+            return
+          }
+          setStatusMsg('⚙️ AI is generating your tickets...')
+        } catch {
+          // keep going
+        }
+        backoffIndexRef.current += 1
+        scheduleTicketPoll()
+      }, delay)
+    }
+
+    function scheduleStatusPoll() {
+      if (stoppedRef.current) return
+      timeoutRef.current = setTimeout(async () => {
+        if (stoppedRef.current) return
         try {
           const res = await getMeetingStatus(botId)
           const status = res.data.status
           setStatusMsg(STATUS_MESSAGES[status] || `Status: ${status}`)
           if (status === 'completed' || status === 'agent_running') {
-            setPhase('tickets')
-            phaseRef.current = 'tickets'
+            startTimeRef.current = Date.now()
+            scheduleTicketPoll()
+            return
           }
         } catch {
-          // keep polling silently
+          // keep going
         }
-      } else {
-        try {
-          const res = await getTickets(botId)
-          const tickets = res.data.tickets || []
-          if (tickets.length > 0) {
-            clearInterval(intervalRef.current)
-            onTicketsReady(tickets)
-          } else {
-            setStatusMsg('⚙️ AI is generating your tickets...')
-          }
-        } catch {
-          // keep polling silently
-        }
-      }
+        scheduleStatusPoll()
+      }, 5000)
     }
 
-    poll()
-    intervalRef.current = setInterval(poll, 5000)
-    return () => clearInterval(intervalRef.current)
+    // Kick off with an immediate status check, then schedule
+    async function init() {
+      try {
+        const res = await getMeetingStatus(botId)
+        const status = res.data.status
+        setStatusMsg(STATUS_MESSAGES[status] || `Status: ${status}`)
+        if (status === 'completed' || status === 'agent_running') {
+          startTimeRef.current = Date.now()
+          scheduleTicketPoll()
+          return
+        }
+      } catch {
+        // fall through to regular polling
+      }
+      scheduleStatusPoll()
+    }
+
+    init()
+    return () => {
+      stoppedRef.current = true
+      clearTimeout(timeoutRef.current)
+    }
   }, [botId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -66,19 +111,27 @@ export default function StatusPoller({ botId, onTicketsReady }) {
       </div>
 
       <div>
-        <p className="text-lg font-semibold text-gray-800">{statusMsg}</p>
-        <p className="text-sm text-gray-500 mt-1">This page updates automatically. You can leave it open.</p>
+        {error ? (
+          <p className="text-sm font-medium text-red-600">{error}</p>
+        ) : (
+          <>
+            <p className="text-lg font-semibold text-gray-800">{statusMsg}</p>
+            <p className="text-sm text-gray-500 mt-1">This page updates automatically. You can leave it open.</p>
+          </>
+        )}
       </div>
 
-      <div className="flex gap-2">
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"
-            style={{ animationDelay: `${i * 0.15}s` }}
-          />
-        ))}
-      </div>
+      {!error && (
+        <div className="flex gap-2">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"
+              style={{ animationDelay: `${i * 0.15}s` }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
