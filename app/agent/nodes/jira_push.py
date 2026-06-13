@@ -42,12 +42,13 @@ async def get_issue_type_map() -> dict:
         response.raise_for_status()
         issue_types = response.json().get("issueTypes", [])
 
-    type_map = {it["name"]: it["id"] for it in issue_types}
-    if "Bug" not in type_map and "Task" in type_map:
-        type_map["Bug"] = type_map["Task"]
-
-    _issue_type_cache = type_map
+    _issue_type_cache = {it["name"]: it["id"] for it in issue_types if not it.get("subtask")}
     return _issue_type_cache
+
+
+async def get_valid_issue_types() -> list[str]:
+    type_map = await get_issue_type_map()
+    return list(type_map.keys())
 
 
 async def push_to_jira(state: MeetingState) -> dict:

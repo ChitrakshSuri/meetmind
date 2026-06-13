@@ -4,6 +4,7 @@ import uuid
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from app.agent.state import MeetingState
+from app.agent.nodes.jira_push import get_valid_issue_types
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ Your job:
 For each action item create a ticket with:
 - title: Clear and actionable, max 8 words, correct technical names
 - description: 2-3 sentences. What needs to be done, why, and any context from the meeting
-- ticket_type: "Bug" if something is broken, "Task" if something needs to be built or done
+- ticket_type: one of {types_str}. If something is broken use the task-equivalent type.
 - priority: "High" if urgent/blocking, "Medium" if normal sprint work, "Low" if nice-to-have
 - assignee: exact name if mentioned, otherwise "Unassigned"
 
@@ -42,7 +43,7 @@ Respond ONLY with valid JSON, no markdown fences:
     {{
       "title": "...",
       "description": "...",
-      "ticket_type": "Bug|Task",
+      "ticket_type": "{types_str}",
       "priority": "High|Medium|Low",
       "assignee": "..."
     }}
@@ -54,12 +55,18 @@ Action items to convert:
 
 
 async def generate_tickets(state: MeetingState) -> dict:
+    valid_types = await get_valid_issue_types()
+    valid_set = set(valid_types)
+    default_type = "Task" if "Task" in valid_set else (valid_types[0] if valid_types else "Task")
+    types_str = "|".join(valid_types) if valid_types else "Task"
+
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
     response = await llm.ainvoke(
         [
             HumanMessage(
                 content=_PROMPT.format(
-                    action_items=json.dumps(state["action_items"], indent=2)
+                    types_str=types_str,
+                    action_items=json.dumps(state["action_items"], indent=2),
                 )
             )
         ]
@@ -68,9 +75,8 @@ async def generate_tickets(state: MeetingState) -> dict:
         data = json.loads(_clean_json(response.content))
         tickets = []
         for t in data.get("tickets", []):
-            ticket_type = t.get("ticket_type", "Task")
-            if ticket_type not in ("Bug", "Task"):
-                ticket_type = "Task"
+            raw_type = t.get("ticket_type", default_type)
+            ticket_type = raw_type if raw_type in valid_set else default_type
             tickets.append(
                 {
                     "id": uuid.uuid4().hex[:8],
