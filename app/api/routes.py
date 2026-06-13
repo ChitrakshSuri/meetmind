@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import traceback
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 from app.api.schemas import (
@@ -106,17 +107,28 @@ async def meetingbaas_webhook(payload: dict, request: Request):
 
 async def _process_meeting(bot_id: str, app) -> None:
     try:
+        logger.info(f"[{bot_id}] Fetching meeting data from MeetingBaaS")
         meeting_data = await get_meeting_data(bot_id)
         meeting_url = meeting_data.get("meeting_url", "")
+        logger.info(f"[{bot_id}] Meeting data received — status={meeting_data.get('status')}, url={meeting_url!r}")
 
-        transcript_segments = await fetch_transcript(meeting_data["transcription"])
+        transcription_url = meeting_data.get("transcription")
+        if not transcription_url:
+            logger.error(f"[{bot_id}] No transcription URL in meeting data: {meeting_data}")
+            return
+
+        logger.info(f"[{bot_id}] Fetching transcript from {transcription_url}")
+        transcript_segments = await fetch_transcript(transcription_url)
+        logger.info(f"[{bot_id}] Got {len(transcript_segments)} transcript segments")
+
         transcript = "\n".join(
             f"{seg.get('speaker', 'Unknown')}: {seg.get('text', '').strip()}"
             for seg in transcript_segments
             if seg.get("text", "").strip()
         )
-        logger.info(f"Transcript ready for {bot_id} ({len(transcript)} chars)")
+        logger.info(f"[{bot_id}] Transcript built — {len(transcript)} chars")
 
+        logger.info(f"[{bot_id}] Saving Meeting row to DB")
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Meeting).where(Meeting.bot_id == bot_id))
             meeting = result.scalar_one_or_none()
@@ -132,10 +144,11 @@ async def _process_meeting(bot_id: str, app) -> None:
                 meeting.transcript = transcript
                 meeting.status = "agent_running"
             await db.commit()
+        logger.info(f"[{bot_id}] Meeting row saved")
 
         graph = get_graph(app)
         if graph is None:
-            logger.error(f"Graph not initialized, skipping agent for {bot_id}")
+            logger.error(f"[{bot_id}] Graph not initialized — checkpointer may have failed at startup")
             return
 
         initial_state: MeetingState = {
@@ -152,7 +165,8 @@ async def _process_meeting(bot_id: str, app) -> None:
             "voice_summary_path": "",
         }
         config = {"configurable": {"thread_id": bot_id}}
+        logger.info(f"[{bot_id}] Invoking LangGraph agent")
         await graph.ainvoke(initial_state, config=config)
-        logger.info(f"Agent pipeline paused at human_review for {bot_id}")
+        logger.info(f"[{bot_id}] Agent paused at human_review — awaiting approval")
     except Exception as e:
-        logger.error(f"Failed to process meeting {bot_id}: {e}")
+        logger.error(f"[{bot_id}] Failed to process meeting: {e}\n{traceback.format_exc()}")
