@@ -31,7 +31,7 @@ def test_start_meeting_returns_bot_id():
     assert response.status_code == 200
     data = response.json()
     assert data["bot_id"] == "bot-xyz-999"
-    assert data["status"] == "processing"
+    assert data["status"] == "bot_created"
 
 
 def test_start_meeting_uses_default_bot_name():

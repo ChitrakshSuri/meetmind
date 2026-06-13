@@ -16,7 +16,7 @@ def ping():
 @router.post("/meetings/start", response_model=StartMeetingResponse)
 async def start_meeting(request: StartMeetingRequest):
     bot_id = await send_bot_to_meeting(request.meeting_url, request.bot_name)
-    return StartMeetingResponse(bot_id=bot_id, status="processing")
+    return StartMeetingResponse(bot_id=bot_id, status="bot_created")
 
 
 @router.get("/meetings/{bot_id}/status", response_model=MeetingStatusResponse)
