@@ -1,144 +1,208 @@
 import { useState, useEffect, useRef } from 'react'
-import { approveTickets, getAssignees } from '../api/client'
+import { approveTickets, getJiraMetadata } from '../api/client'
 
-const TYPE_CONFIG = {
-  Epic:  { badge: 'bg-purple-100 text-purple-700', dot: 'bg-purple-500' },
-  Story: { badge: 'bg-green-100 text-green-700',   dot: 'bg-green-500'  },
-  Task:  { badge: 'bg-blue-100 text-blue-700',     dot: 'bg-blue-500'   },
-  Bug:   { badge: 'bg-red-100 text-red-700',       dot: 'bg-red-500'    },
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const TYPE_DOT = {
+  Epic:  'bg-purple-500',
+  Story: 'bg-green-500',
+  Task:  'bg-blue-500',
+  Bug:   'bg-red-500',
+}
+const TYPE_BADGE = {
+  Epic:  'bg-purple-100 text-purple-700',
+  Story: 'bg-green-100 text-green-700',
+  Task:  'bg-blue-100 text-blue-700',
+  Bug:   'bg-red-100 text-red-700',
+}
+const PRIORITY_ICON = {
+  Highest: '🔴', High: '🔴', Medium: '🟡', Low: '🟢', Lowest: '🟢',
 }
 
-const PRIORITY_CONFIG = {
-  High:   { icon: '🔴', label: 'High'   },
-  Medium: { icon: '🟡', label: 'Medium' },
-  Low:    { icon: '🟢', label: 'Low'    },
+const META_FALLBACK = {
+  assignees:   [],
+  priorities:  [{ id: '1', name: 'High' }, { id: '2', name: 'Medium' }, { id: '3', name: 'Low' }],
+  issue_types: [{ id: '1', name: 'Bug' }, { id: '2', name: 'Task' }],
+  labels:      [],
+  epics:       [],
 }
 
-function Spinner() {
+const INPUT_CLS = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500'
+const LABEL_CLS = 'block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1'
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function Spinner({ cls = 'h-4 w-4' }) {
   return (
-    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+    <svg className={`animate-spin ${cls}`} fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
     </svg>
   )
 }
 
-// ── Edit side panel ───────────────────────────────────────────────────────────
+// ── Labels multi-select ───────────────────────────────────────────────────────
 
-function EditPanel({ ticket, assignees, onSave, onClose }) {
+function LabelsField({ selected, suggestions, onChange }) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handle(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [])
+
+  const filtered = suggestions.filter(
+    (l) => l.toLowerCase().includes(search.toLowerCase()) && !selected.includes(l)
+  )
+
+  function add(label) {
+    if (label && !selected.includes(label)) onChange([...selected, label])
+    setSearch('')
+    setOpen(false)
+  }
+
+  function handleKey(e) { if (e.key === 'Enter' && search.trim()) add(search.trim()) }
+
+  return (
+    <div className="relative" ref={ref}>
+      <div
+        className="min-h-[38px] border border-gray-300 rounded-lg px-2 py-1.5 flex flex-wrap gap-1.5 focus-within:ring-2 focus-within:ring-indigo-500 cursor-text"
+        onClick={() => setOpen(true)}
+      >
+        {selected.map((l) => (
+          <span key={l} className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full">
+            {l}
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={(e) => { e.stopPropagation(); onChange(selected.filter((x) => x !== l)) }}
+              className="hover:text-indigo-900 leading-none"
+            >×</button>
+          </span>
+        ))}
+        <input
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKey}
+          placeholder={selected.length === 0 ? 'Add labels…' : ''}
+          className="flex-1 min-w-[80px] text-sm outline-none bg-transparent py-0.5"
+        />
+      </div>
+      {open && (filtered.length > 0 || search.trim()) && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-36 overflow-y-auto">
+          {search.trim() && !suggestions.includes(search.trim()) && (
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => add(search.trim())}
+              className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 text-indigo-600"
+            >
+              + Create &quot;{search.trim()}&quot;
+            </button>
+          )}
+          {filtered.map((l) => (
+            <button
+              key={l}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => add(l)}
+              className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 text-gray-700"
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Edit panel ────────────────────────────────────────────────────────────────
+
+function EditPanel({ ticket, meta, onSave, onDelete, onClose }) {
   const [draft, setDraft] = useState({
-    title:       ticket.title,
-    description: ticket.description,
-    ticket_type: ticket.ticket_type,
-    priority:    ticket.priority,
-    assignee:    ticket.assignee || '',
-    due_date:    ticket.due_date || '',
-    labels:      Array.isArray(ticket.labels)
-                   ? ticket.labels.join(', ')
-                   : (ticket.labels || ''),
+    title:               ticket.title,
+    description:         ticket.description,
+    ticket_type:         ticket.ticket_type,
+    priority:            ticket.priority,
+    assignee:            ticket.assignee || '',
+    assignee_account_id: ticket.assignee_account_id || null,
+    parent_epic:         ticket.parent_epic || '',
+    labels:              Array.isArray(ticket.labels) ? ticket.labels : [],
+    due_date:            ticket.due_date || '',
+    start_date:          ticket.start_date || '',
   })
   const [assigneeSearch, setAssigneeSearch] = useState(ticket.assignee || '')
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const dropdownRef = useRef(null)
+  const [assigneeOpen, setAssigneeOpen] = useState(false)
+  const assigneeRef = useRef(null)
 
-  const filteredAssignees = assignees.filter((a) =>
+  useEffect(() => {
+    function handle(e) {
+      if (assigneeRef.current && !assigneeRef.current.contains(e.target)) setAssigneeOpen(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [])
+
+  const filteredAssignees = meta.assignees.filter((a) =>
     a.displayName?.toLowerCase().includes(assigneeSearch.toLowerCase())
   )
 
-  useEffect(() => {
-    function handleClick(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  function handleSave() {
-    onSave({
-      ...ticket,
-      ...draft,
-      labels: draft.labels
-        ? draft.labels.split(',').map((l) => l.trim()).filter(Boolean)
-        : [],
-    })
-  }
+  function set(key, val) { setDraft((d) => ({ ...d, [key]: val })) }
 
   return (
     <>
       <style>{`
-        @keyframes slideInRight {
-          from { transform: translateX(100%); }
-          to   { transform: translateX(0);    }
-        }
-        .slide-in-right { animation: slideInRight 0.2s ease-out; }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .slide-panel { animation: slideInRight 0.2s ease-out; }
       `}</style>
 
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 bg-black/40 z-40"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
 
-      {/* Panel */}
-      <div className="slide-in-right fixed right-0 top-0 h-full w-full sm:w-[400px] bg-white shadow-2xl z-50 flex flex-col">
+      <div className="slide-panel fixed right-0 top-0 h-full w-full sm:w-[420px] bg-white shadow-2xl z-50 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
-          <p className="font-semibold text-gray-800 text-sm truncate pr-3">{ticket.title}</p>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 text-xl leading-none shrink-0"
-          >
-            ✕
-          </button>
+          <p className="font-semibold text-gray-800 text-sm truncate pr-3">{draft.title}</p>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none shrink-0">✕</button>
         </div>
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-          {/* Title */}
+
+          {/* Summary */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              Title
-            </label>
-            <input
-              value={draft.title}
-              onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <label className={LABEL_CLS}>Summary</label>
+            <input value={draft.title} onChange={(e) => set('title', e.target.value)} className={INPUT_CLS} />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              Description
-            </label>
+            <label className={LABEL_CLS}>Description</label>
             <textarea
-              rows={4}
+              rows={5}
               value={draft.description}
-              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              onChange={(e) => set('description', e.target.value)}
+              className={`${INPUT_CLS} resize-none`}
             />
           </div>
 
-          {/* Type */}
+          {/* Issue Type */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Type
-            </label>
+            <label className={LABEL_CLS}>Issue Type</label>
             <div className="grid grid-cols-2 gap-2">
-              {Object.entries(TYPE_CONFIG).map(([type, cfg]) => (
+              {meta.issue_types.map((it) => (
                 <button
-                  key={type}
-                  onClick={() => setDraft((d) => ({ ...d, ticket_type: type }))}
+                  key={it.id}
+                  onClick={() => set('ticket_type', it.name)}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                    draft.ticket_type === type
+                    draft.ticket_type === it.name
                       ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                       : 'border-gray-200 hover:border-gray-300 text-gray-700'
                   }`}
                 >
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
-                  {type}
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${TYPE_DOT[it.name] || 'bg-gray-400'}`} />
+                  {it.name}
                 </button>
               ))}
             </div>
@@ -146,21 +210,19 @@ function EditPanel({ ticket, assignees, onSave, onClose }) {
 
           {/* Priority */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Priority
-            </label>
-            <div className="flex gap-2">
-              {Object.entries(PRIORITY_CONFIG).map(([priority, cfg]) => (
+            <label className={LABEL_CLS}>Priority</label>
+            <div className="flex flex-wrap gap-2">
+              {meta.priorities.map((p) => (
                 <button
-                  key={priority}
-                  onClick={() => setDraft((d) => ({ ...d, priority }))}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                    draft.priority === priority
+                  key={p.id}
+                  onClick={() => set('priority', p.name)}
+                  className={`flex-1 min-w-[70px] flex items-center justify-center gap-1 px-2 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                    draft.priority === p.name
                       ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                       : 'border-gray-200 hover:border-gray-300 text-gray-700'
                   }`}
                 >
-                  {cfg.icon} {cfg.label}
+                  {PRIORITY_ICON[p.name] || '⚪'} {p.name}
                 </button>
               ))}
             </div>
@@ -168,47 +230,43 @@ function EditPanel({ ticket, assignees, onSave, onClose }) {
 
           {/* Assignee */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              Assignee
-            </label>
-            {assignees.length > 0 ? (
-              <div className="relative" ref={dropdownRef}>
+            <label className={LABEL_CLS}>Assignee</label>
+            {meta.assignees.length > 0 ? (
+              <div className="relative" ref={assigneeRef}>
                 <input
                   value={assigneeSearch}
                   onChange={(e) => {
                     setAssigneeSearch(e.target.value)
-                    setDraft((d) => ({ ...d, assignee: e.target.value }))
-                    setDropdownOpen(true)
+                    set('assignee', e.target.value)
+                    set('assignee_account_id', null)
+                    setAssigneeOpen(true)
                   }}
-                  onFocus={() => setDropdownOpen(true)}
-                  placeholder="Search by name..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onFocus={() => setAssigneeOpen(true)}
+                  placeholder="Search by name…"
+                  className={INPUT_CLS}
                 />
-                {dropdownOpen && filteredAssignees.length > 0 && (
+                {assigneeOpen && filteredAssignees.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-44 overflow-y-auto">
-                    {filteredAssignees.map((user) => (
+                    {filteredAssignees.map((u) => (
                       <button
-                        key={user.accountId}
+                        key={u.accountId}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
-                          setDraft((d) => ({ ...d, assignee: user.displayName }))
-                          setAssigneeSearch(user.displayName)
-                          setDropdownOpen(false)
+                          set('assignee', u.displayName)
+                          set('assignee_account_id', u.accountId)
+                          setAssigneeSearch(u.displayName)
+                          setAssigneeOpen(false)
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 text-sm text-left"
                       >
-                        {user.avatarUrls?.['24x24'] ? (
-                          <img
-                            src={user.avatarUrls['24x24']}
-                            className="w-6 h-6 rounded-full shrink-0"
-                            alt=""
-                          />
+                        {u.avatar ? (
+                          <img src={u.avatar} className="w-6 h-6 rounded-full shrink-0" alt="" />
                         ) : (
                           <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold shrink-0">
-                            {user.displayName?.[0] ?? '?'}
+                            {u.displayName?.[0] ?? '?'}
                           </span>
                         )}
-                        <span className="text-gray-800">{user.displayName}</span>
+                        <span className="text-gray-800">{u.displayName}</span>
                       </button>
                     ))}
                   </div>
@@ -217,48 +275,79 @@ function EditPanel({ ticket, assignees, onSave, onClose }) {
             ) : (
               <input
                 value={draft.assignee}
-                onChange={(e) => setDraft((d) => ({ ...d, assignee: e.target.value }))}
+                onChange={(e) => set('assignee', e.target.value)}
                 placeholder="Unassigned"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={INPUT_CLS}
               />
             )}
           </div>
 
-          {/* Due Date */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              Due Date
-            </label>
-            <input
-              type="date"
-              value={draft.due_date}
-              onChange={(e) => setDraft((d) => ({ ...d, due_date: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
+          {/* Parent Epic */}
+          {meta.epics.length > 0 && (
+            <div>
+              <label className={LABEL_CLS}>Parent Epic</label>
+              <select
+                value={draft.parent_epic}
+                onChange={(e) => set('parent_epic', e.target.value)}
+                className={INPUT_CLS}
+              >
+                <option value="">None</option>
+                {meta.epics.map((ep) => (
+                  <option key={ep.key} value={ep.key}>{ep.key}: {ep.summary}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Labels */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+            <label className={LABEL_CLS}>
               Labels{' '}
-              <span className="font-normal normal-case text-gray-400">comma separated</span>
+              <span className="font-normal normal-case text-gray-400">press Enter to create</span>
             </label>
-            <input
-              value={draft.labels}
-              onChange={(e) => setDraft((d) => ({ ...d, labels: e.target.value }))}
-              placeholder="frontend, urgent, needs-review"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            <LabelsField
+              selected={draft.labels}
+              suggestions={meta.labels}
+              onChange={(labels) => set('labels', labels)}
             />
+          </div>
+
+          {/* Start Date + Due Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLS}>Start Date</label>
+              <input
+                type="date"
+                value={draft.start_date}
+                onChange={(e) => set('start_date', e.target.value)}
+                className={INPUT_CLS}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLS}>Due Date</label>
+              <input
+                type="date"
+                value={draft.due_date}
+                onChange={(e) => set('due_date', e.target.value)}
+                className={INPUT_CLS}
+              />
+            </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t shrink-0">
+        <div className="px-5 py-4 border-t shrink-0 space-y-2">
           <button
-            onClick={handleSave}
+            onClick={() => onSave({ ...ticket, ...draft })}
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-2.5 transition-colors text-sm"
           >
             Save Changes
+          </button>
+          <button
+            onClick={() => onDelete(ticket.id)}
+            className="w-full text-red-500 hover:text-red-700 text-sm font-medium py-1.5 transition-colors"
+          >
+            Delete Ticket
           </button>
         </div>
       </div>
@@ -269,35 +358,33 @@ function EditPanel({ ticket, assignees, onSave, onClose }) {
 // ── Ticket card (list view) ───────────────────────────────────────────────────
 
 function TicketCard({ ticket, onToggle, onOpenEdit }) {
-  const typeCfg = TYPE_CONFIG[ticket.ticket_type] || TYPE_CONFIG.Task
-  const priCfg  = PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.Medium
+  const dot   = TYPE_DOT[ticket.ticket_type]   || 'bg-gray-400'
+  const badge = TYPE_BADGE[ticket.ticket_type] || 'bg-gray-100 text-gray-600'
+  const icon  = PRIORITY_ICON[ticket.priority] || '⚪'
 
   return (
-    <div
-      className={`border rounded-xl p-4 transition-all ${
-        ticket.approved
-          ? 'border-indigo-300 bg-indigo-50'
-          : 'border-gray-200 bg-gray-50 opacity-60'
-      }`}
-    >
+    <div className={`border rounded-xl p-4 transition-all ${
+      ticket.approved ? 'border-indigo-300 bg-indigo-50' : 'border-gray-200 bg-gray-50 opacity-60'
+    }`}>
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-800 text-sm mb-1.5">{ticket.title}</p>
-
-          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${typeCfg.badge}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${typeCfg.dot}`} />
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
               {ticket.ticket_type}
             </span>
-            <span className="text-xs text-gray-500">{priCfg.icon} {ticket.priority}</span>
+            <span className="text-xs text-gray-500">{icon} {ticket.priority}</span>
             {ticket.assignee && ticket.assignee !== 'Unassigned' && (
               <span className="text-xs text-gray-500">👤 {ticket.assignee}</span>
             )}
             {ticket.due_date && (
               <span className="text-xs text-gray-500">📅 {ticket.due_date}</span>
             )}
+            {Array.isArray(ticket.labels) && ticket.labels.map((l) => (
+              <span key={l} className="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full">{l}</span>
+            ))}
           </div>
-
           <p className="text-xs text-gray-500 line-clamp-2">{ticket.description}</p>
         </div>
 
@@ -330,17 +417,19 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
   const [tickets, setTickets] = useState(
     initialTickets.map((t) => ({ ...t, approved: true }))
   )
+  const [jiraMeta, setJiraMeta] = useState(null)
+  const [metaLoading, setMetaLoading] = useState(true)
   const [editingTicket, setEditingTicket] = useState(null)
-  const [assignees, setAssignees] = useState([])
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState(null)
 
   const approvedCount = tickets.filter((t) => t.approved).length
 
   useEffect(() => {
-    getAssignees()
-      .then((res) => setAssignees(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setAssignees([]))
+    getJiraMetadata()
+      .then((res) => setJiraMeta(res.data))
+      .catch(() => setJiraMeta(META_FALLBACK))
+      .finally(() => setMetaLoading(false))
   }, [])
 
   function showToast(msg) {
@@ -357,10 +446,15 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
     setEditingTicket(null)
   }
 
+  function deleteTicket(id) {
+    setTickets((prev) => prev.filter((t) => t.id !== id))
+    setEditingTicket(null)
+  }
+
   async function handleSubmit() {
     const approved = tickets.filter((t) => t.approved)
     if (!approved.length) {
-      showToast('No tickets approved — approve at least one or click "End without Jira" below.')
+      showToast('Please approve at least one ticket before pushing to Jira.')
       return
     }
     setLoading(true)
@@ -368,8 +462,10 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
       await approveTickets(
         botId,
         approved.map((t) => t.id),
-        approved.map(({ id, title, description, ticket_type, priority, assignee, due_date, labels }) => ({
-          id, title, description, ticket_type, priority, assignee, due_date, labels,
+        approved.map(({ id, title, description, ticket_type, priority, assignee,
+                        assignee_account_id, due_date, start_date, labels, parent_epic }) => ({
+          id, title, description, ticket_type, priority, assignee,
+          assignee_account_id, due_date, start_date, labels, parent_epic,
         }))
       )
       onComplete()
@@ -380,6 +476,8 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
     }
   }
 
+  const meta = jiraMeta || META_FALLBACK
+
   return (
     <div className="bg-white rounded-2xl shadow-md p-6">
       {/* Toast */}
@@ -389,21 +487,27 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
         </div>
       )}
 
-      {/* Side panel */}
+      {/* Edit panel */}
       {editingTicket && (
         <EditPanel
           ticket={editingTicket}
-          assignees={assignees}
+          meta={meta}
           onSave={saveEdit}
+          onDelete={deleteTicket}
           onClose={() => setEditingTicket(null)}
         />
       )}
 
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-800">Review Tickets</h2>
-        <span className="text-sm text-gray-500">
-          {approvedCount} of {tickets.length} approved
-        </span>
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Review Tickets</h2>
+          {metaLoading && (
+            <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+              <Spinner cls="h-3 w-3" /> Loading Jira metadata…
+            </p>
+          )}
+        </div>
+        <span className="text-sm text-gray-500">{approvedCount} of {tickets.length} approved</span>
       </div>
 
       <div className="space-y-3 mb-6">
@@ -423,11 +527,7 @@ export default function TicketReview({ botId, tickets: initialTickets, onComplet
           disabled={loading}
           className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold rounded-lg px-6 py-3 flex items-center justify-center gap-2 transition-colors"
         >
-          {loading ? (
-            <><Spinner /> Pushing to Jira...</>
-          ) : (
-            `Push ${approvedCount} ticket${approvedCount !== 1 ? 's' : ''} to Jira →`
-          )}
+          {loading ? <><Spinner /> Pushing to Jira…</> : `Push ${approvedCount} ticket${approvedCount !== 1 ? 's' : ''} to Jira →`}
         </button>
 
         {approvedCount === 0 && (
