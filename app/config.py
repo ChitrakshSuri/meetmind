@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://meetmind:meetmind@localhost:5432/meetmind"
     app_port: int = 8000
     frontend_url: str = "http://localhost:3000"
+    webhook_base_url: str = "http://localhost:8000"
 
     model_config = {"env_file": ".env"}
 

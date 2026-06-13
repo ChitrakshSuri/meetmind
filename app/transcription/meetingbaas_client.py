@@ -18,6 +18,11 @@ async def send_bot_to_meeting(meeting_url: str, bot_name: str = "MeetMind AI") -
                 "recording_mode": "speaker_view",
                 "transcription_enabled": True,
                 "transcription_config": {"provider": "gladia"},
+                "callback_enabled": True,
+                "callback_config": {
+                    "url": settings.webhook_base_url + "/api/v1/webhook/meetingbaas",
+                    "method": "POST",
+                },
             },
         )
         response.raise_for_status()
