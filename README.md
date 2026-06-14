@@ -1,190 +1,154 @@
-# MeetMind
+<div align="center">
 
-An AI-powered meeting assistant that joins your calls, transcribes the conversation, extracts action items, and creates Jira tickets — all with a human-in-the-loop review step before anything is pushed.
+# 🧠 MeetMind
 
----
+### AI-powered meeting assistant that joins your meetings, transcribes them, and automatically creates Jira tickets — with human-in-the-loop approval before pushing anything.
 
-## How it works
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-meetmind--green.vercel.app-6366f1?style=for-the-badge&logo=vercel)](https://meetmind-green.vercel.app)
+[![GitHub](https://img.shields.io/badge/GitHub-ChitrakshSuri%2Fmeetmind-181717?style=for-the-badge&logo=github)](https://github.com/ChitrakshSuri/meetmind)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Agent-FF6B35?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
 
-```
-Meeting call
-     │
-     ▼
-MeetingBaaS bot joins & records
-     │
-     ▼ (webhook: bot.completed)
-Transcript fetched (Gladia STT)
-     │
-     ▼
-LangGraph pipeline
-  ├─ analyze_meeting      → meeting type, topics, decisions
-  ├─ extract_action_items → structured action items
-  ├─ generate_tickets     → Jira tickets (types fetched live from Jira)
-  ├─ human_review         → ⏸ HITL interrupt — user reviews/edits in UI
-  ├─ push_to_jira         → creates issues via Jira REST API v3
-  └─ generate_summary     → GPT-4o meeting summary
-```
+🌐 **Live Demo:** [meetmind-green.vercel.app](https://meetmind-green.vercel.app) &nbsp;|&nbsp; 📚 **API Docs:** [meetmind-wgo0.onrender.com/docs](https://meetmind-wgo0.onrender.com/docs)
 
-The pipeline pauses at `human_review` using LangGraph's `interrupt()`. The React UI lets you edit every ticket field — type, priority, assignee (with avatar search), sprint, labels, parent epic, start/due dates — before approving. Only then does the graph resume and push to Jira.
+</div>
 
 ---
 
-## Tech stack
+![MeetMind Demo](docs/demo.gif)
+
+---
+
+## ✨ Key Features
+
+- 🤖 **Auto-joins Google Meet / Zoom** via MeetingBaaS bot — no manual recording needed
+- 🎙️ **Real-time transcription** via Gladia STT with speaker labeling
+- 🧠 **LangGraph agent with 7 nodes:** analyze → decide → extract → generate → validate → HITL → push
+- ✅ **Human-in-the-loop approval** — every ticket is reviewed and editable before anything hits Jira
+- 🔄 **Corrective RAG** — agent validates its own tickets and self-corrects before showing to humans
+- 🚦 **Conditional routing** — agent decides if tickets are even needed (skips for casual meetings)
+- 🔁 **Exponential backoff retry** on Jira API failures (3 attempts: 5s → 15s → 30s)
+- 🎯 **Dynamic Jira metadata** — fetches issue types, priorities, assignees, sprints, epics at runtime
+- 📊 **LangSmith observability** for full agent tracing and token usage
+- 🐳 **Fully dockerized** with Docker Compose and Postgres checkpointing
+
+---
+
+## 🏗️ Architecture
+
+```
+Google Meet / Zoom
+       ↓
+MeetingBaaS Bot (joins + records)
+       ↓
+Gladia STT (transcription)
+       ↓
+Webhook → FastAPI Backend
+       ↓
+┌─────────────────────────────────────┐
+│           LangGraph Agent           │
+│                                     │
+│  analyze_meeting                    │
+│       ↓                             │
+│  extract_action_items               │
+│       ↓                             │
+│  decide_ticket_creation ──→ summary │
+│       ↓ (yes)                       │
+│  generate_tickets                   │
+│       ↓                             │
+│  validate_tickets (corrective RAG)  │
+│       ↓                             │
+│  human_review (HITL pause) ⏸       │
+│       ↓ (approved)                  │
+│  push_to_jira (retry loop)          │
+│       ↓                             │
+│  generate_summary                   │
+└─────────────────────────────────────┘
+       ↓
+React Frontend (review + approve)
+       ↓
+Jira Board (tickets created)
+```
+
+The pipeline **pauses at `human_review`** using LangGraph's `interrupt()`. LangGraph state is persisted in Postgres via `AsyncPostgresSaver`, so the pause survives server restarts and can last indefinitely.
+
+---
+
+## 🛠️ Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Backend | FastAPI + Python 3.12, async throughout |
-| AI pipeline | LangGraph `StateGraph` with `AsyncPostgresSaver` checkpointing |
-| LLM | GPT-4o via `langchain-openai` |
-| Meeting recording | MeetingBaaS v2 API (Gladia transcription) |
-| Database | PostgreSQL 16 + SQLAlchemy async + Alembic |
+| Meeting Bot | MeetingBaaS v2 |
+| Transcription | Gladia (via MeetingBaaS) |
+| Agent Framework | LangGraph |
+| LLM | GPT-4o |
+| Backend | FastAPI + Python 3.12 |
+| Database | PostgreSQL + SQLAlchemy async |
+| Migrations | Alembic |
 | Frontend | React 18 + Vite + Tailwind CSS |
-| Observability | LangSmith tracing |
-| Deployment | Docker Compose (multi-stage builds) |
+| Jira Integration | Atlassian REST API v3 |
+| Observability | LangSmith |
+| Containerization | Docker + Docker Compose |
+| Deployment | Render (backend) + Vercel (frontend) |
 
 ---
 
-## Prerequisites
-
-- Docker & Docker Compose
-- A public HTTPS URL for the MeetingBaaS webhook (ngrok works for local dev)
-- API keys listed in the setup section below
-
----
-
-## Setup
-
-**1. Clone and copy env file**
+## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/your-username/meetmind.git
+git clone https://github.com/ChitrakshSuri/meetmind
 cd meetmind
 cp .env.example .env
-```
-
-**2. Fill in `.env`**
-
-```env
-# OpenAI
-OPENAI_API_KEY=sk-...
-
-# MeetingBaaS — joins and records your meetings (~$0.10/meeting)
-# Get key at https://auth.meetingbaas.com
-MEETINGBAAS_API_KEY=mb-...
-
-# Jira / Atlassian
-ATLASSIAN_BASE_URL=https://yourcompany.atlassian.net
-ATLASSIAN_API_TOKEN=...          # Profile → Manage account → Security → API tokens
-ATLASSIAN_EMAIL=you@company.com
-JIRA_PROJECT_KEY=ENG             # The short key shown in your project URL
-
-# LangSmith (optional but recommended)
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=ls__...
-LANGCHAIN_PROJECT=meetmind
-
-# Database (Docker Compose sets this automatically)
-DATABASE_URL=postgresql+asyncpg://meetmind:meetmind@localhost:5432/meetmind
-
-# Webhook — must be publicly reachable by MeetingBaaS
-# Use ngrok: `ngrok http 8000` then paste the https URL here
-WEBHOOK_BASE_URL=https://your-ngrok-url.ngrok.io
-```
-
-**3. Start everything**
-
-```bash
+# Fill in your API keys in .env
 docker compose up --build
-```
-
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API docs: http://localhost:8000/docs
-
-**4. Run database migrations** (first time only)
-
-```bash
-docker compose exec backend alembic upgrade head
+# Frontend: http://localhost:3000
+# Backend:  http://localhost:8000/docs
 ```
 
 ---
 
-## Local development (without Docker)
+## 🔑 Environment Variables
 
-```bash
-# Backend
-poetry install
-poetry run uvicorn app.main:app --reload --port 8000
-
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev        # http://localhost:5173
+```
+OPENAI_API_KEY          # GPT-4o for all agent nodes
+MEETINGBAAS_API_KEY     # Meeting bot + Gladia transcription
+ATLASSIAN_API_TOKEN     # Jira ticket creation (API token, not password)
+ATLASSIAN_EMAIL         # Your Atlassian account email
+ATLASSIAN_BASE_URL      # https://yoursite.atlassian.net
+JIRA_PROJECT_KEY        # e.g. KAN
+LANGCHAIN_API_KEY       # LangSmith observability (optional)
+DATABASE_URL            # PostgreSQL connection string
+WEBHOOK_BASE_URL        # Public URL for MeetingBaaS webhook callback
+FRONTEND_URL            # Frontend URL for CORS
+WEBHOOK_SECRET          # Shared secret to validate incoming webhooks (optional)
 ```
 
-The Vite dev server proxies `/api` to `localhost:8000`.
+See [`.env.example`](.env.example) for all options with descriptions.
+
+> **Local webhook**: MeetingBaaS needs to reach your `WEBHOOK_BASE_URL`. For local dev use [ngrok](https://ngrok.com): `ngrok http 8000`.
 
 ---
 
-## Project structure
+## ⚙️ How It Works
 
-```
-meetmind/
-├── app/
-│   ├── agent/
-│   │   ├── graph.py              # LangGraph StateGraph definition
-│   │   ├── state.py              # MeetingState TypedDict
-│   │   └── nodes/
-│   │       ├── analyzer.py       # meeting type, topics, decisions
-│   │       ├── extractor.py      # action item extraction
-│   │       ├── ticket_gen.py     # GPT-4o → Jira tickets (dynamic types)
-│   │       ├── hitl.py           # human-in-the-loop interrupt
-│   │       ├── jira_push.py      # Jira REST API v3 push + type cache
-│   │       └── summarizer.py     # meeting summary
-│   ├── api/
-│   │   ├── routes.py             # FastAPI endpoints + webhook handler
-│   │   └── schemas.py            # Pydantic request/response models
-│   ├── db/
-│   │   ├── models.py             # SQLAlchemy Meeting model
-│   │   └── base.py               # async engine + session factory
-│   ├── transcription/
-│   │   └── meetingbaas_client.py # bot creation + transcript fetch
-│   ├── config.py                 # Pydantic Settings (extra="ignore")
-│   └── main.py                   # FastAPI app + async lifespan
-├── frontend/
-│   └── src/
-│       ├── components/
-│       │   ├── MeetingInput.jsx  # step 1: enter meeting URL
-│       │   ├── StatusPoller.jsx  # step 2: poll with exponential backoff
-│       │   ├── TicketReview.jsx  # step 3: review + edit tickets
-│       │   └── Summary.jsx       # step 4: summary + Jira link
-│       └── api/client.js         # Axios API calls
-├── tests/
-├── alembic/                      # database migrations
-├── docker-compose.yml
-└── .env.example
-```
+1. Paste your Google Meet or Zoom URL in the UI
+2. MeetMind sends an AI bot to join your meeting
+3. Bot records and transcribes in real-time using Gladia STT
+4. When the meeting ends, MeetingBaaS fires a webhook to your backend
+5. LangGraph agent analyzes the transcript and decides if tickets are needed
+6. If yes: generates tickets → validates them (corrective RAG) → pauses for human review
+7. You review, edit, approve or reject each ticket in the UI
+8. Approved tickets are pushed to Jira with full metadata (sprint, assignee, labels, epic)
+9. Meeting summary is generated and displayed
 
 ---
 
-## API reference
+## 🎫 Ticket Editing
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/v1/meetings/start` | Send bot to a meeting URL |
-| `GET` | `/api/v1/meetings/{bot_id}/status` | Poll meeting status |
-| `GET` | `/api/v1/meetings/{bot_id}/tickets` | Get generated tickets |
-| `POST` | `/api/v1/meetings/{bot_id}/approve` | Resume pipeline with approved/edited tickets |
-| `GET` | `/api/v1/meetings/{bot_id}/summary` | Get meeting summary |
-| `GET` | `/api/v1/jira/metadata` | Live Jira metadata: assignees, issue types, sprints, epics, statuses |
-| `POST` | `/api/v1/webhook/meetingbaas` | Receives `bot.completed`, triggers pipeline |
-| `GET` | `/health` | Health check |
-
----
-
-## Ticket editing
-
-When reviewing tickets, every field is editable via a slide-in panel populated with live data from your Jira project:
+Every field is editable in the review UI, populated with live data from your Jira project:
 
 - **Issue type** — button grid from your actual Jira issue types (never hardcoded)
 - **Priority** — fetched from Jira, with emoji indicators
@@ -195,21 +159,77 @@ When reviewing tickets, every field is editable via a slide-in panel populated w
 - **Start date / Due date** — date pickers
 - **Description** — full text edit
 
-Tickets can be approved or rejected individually. Rejected tickets are skipped during push. You can also end the session without pushing to Jira at all.
+---
+
+## 📁 Project Structure
+
+```
+meetmind/
+├── app/
+│   ├── agent/
+│   │   ├── graph.py              # LangGraph StateGraph definition
+│   │   ├── state.py              # MeetingState TypedDict
+│   │   └── nodes/
+│   │       ├── analyzer.py       # meeting type, topics, decisions
+│   │       ├── extractor.py      # action item extraction
+│   │       ├── decision.py       # conditional routing node
+│   │       ├── ticket_gen.py     # GPT-4o → Jira tickets
+│   │       ├── validator.py      # corrective RAG validation
+│   │       ├── hitl.py           # human-in-the-loop interrupt
+│   │       ├── jira_push.py      # Jira REST API v3 + retry loop
+│   │       └── summarizer.py     # meeting summary
+│   ├── api/
+│   │   ├── routes.py             # FastAPI endpoints + webhook handler
+│   │   └── schemas.py            # Pydantic request/response models
+│   ├── db/
+│   │   ├── models.py             # SQLAlchemy Meeting + Ticket models
+│   │   └── base.py               # async engine + session factory
+│   ├── transcription/
+│   │   └── meetingbaas_client.py # bot creation + transcript fetch
+│   ├── config.py                 # Pydantic Settings
+│   └── main.py                   # FastAPI app + async lifespan
+├── frontend/
+│   └── src/
+│       ├── components/
+│       │   ├── MeetingInput.jsx  # step 1: enter meeting URL
+│       │   ├── StatusPoller.jsx  # step 2: poll with exponential backoff
+│       │   ├── TicketReview.jsx  # step 3: review + edit tickets
+│       │   └── Summary.jsx       # step 4: summary + Jira link
+│       └── api/client.js         # Axios API client
+├── tests/                        # 43 tests
+├── alembic/                      # database migrations
+├── docker-compose.yml
+└── .env.example
+```
 
 ---
 
-## Notes
-
-- **Webhook**: `WEBHOOK_BASE_URL` must be reachable by MeetingBaaS. For local dev use [ngrok](https://ngrok.com): `ngrok http 8000`.
-- **Persistence**: LangGraph state lives in Postgres via `AsyncPostgresSaver`, so the pipeline survives restarts and the HITL pause can last indefinitely.
-- **Issue type caching**: valid Jira issue type IDs are fetched from `createmeta` on first use and cached in-process. Restart the backend to invalidate the cache.
-- **STT errors**: the LLM prompts are written to handle garbled speech-to-text output — technical names are corrected from context rather than transcribed literally.
-
----
-
-## Running tests
+## 🧪 Testing
 
 ```bash
-poetry run pytest
+poetry run pytest tests/ -v
+# 43 tests passing
 ```
+
+Tests cover all agent nodes (with mocked LLMs), API endpoints, DB models, and transcription client.
+
+---
+
+## 📡 API Reference
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/meetings/start` | Send bot to a meeting URL |
+| `GET` | `/api/v1/meetings/{bot_id}/status` | Poll meeting status |
+| `GET` | `/api/v1/meetings/{bot_id}/tickets` | Get generated tickets |
+| `POST` | `/api/v1/meetings/{bot_id}/approve` | Resume pipeline with approved/edited tickets |
+| `GET` | `/api/v1/meetings/{bot_id}/summary` | Get meeting summary |
+| `GET` | `/api/v1/jira/metadata` | Live Jira metadata: assignees, types, sprints, epics |
+| `POST` | `/api/v1/webhook/meetingbaas` | Receives `bot.completed`, triggers pipeline |
+| `GET` | `/health` | Health check |
+
+---
+
+## 📄 License
+
+MIT
