@@ -24,6 +24,7 @@ Action items created: {ticket_titles}"""
 
 
 async def generate_summary(state: MeetingState) -> dict:
+    logger.info("[AGENT] generate_summary — start")
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
     topics = state.get("topics", [])
     decisions = state.get("decisions", [])
@@ -45,4 +46,6 @@ async def generate_summary(state: MeetingState) -> dict:
     if failed:
         failed_str = ", ".join(failed)
         summary += f"\n\n⚠️ These tickets failed to push to Jira and need manual creation: {failed_str}"
+    logger.info(f"[AGENT] generate_summary — done: {len(summary)} chars")
+    logger.info("[AGENT] ── PIPELINE COMPLETE ──────────────────────────────────")
     return {"summary": summary}

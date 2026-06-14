@@ -39,13 +39,16 @@ Transcript:
 
 
 async def extract_action_items(state: MeetingState) -> dict:
+    logger.info("[AGENT] extract_action_items — start")
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
     response = await llm.ainvoke(
         [HumanMessage(content=_PROMPT.format(transcript=state["transcript"]))]
     )
     try:
         data = json.loads(_clean_json(response.content))
-        return {"action_items": data.get("action_items", [])}
+        items = data.get("action_items", [])
+        logger.info(f"[AGENT] extract_action_items — done: {len(items)} action items extracted")
+        return {"action_items": items}
     except (json.JSONDecodeError, AttributeError) as e:
         logger.error(f"Failed to parse extractor response: {e}\nRaw: {response.content!r}")
         return {"action_items": []}

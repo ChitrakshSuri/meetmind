@@ -56,6 +56,7 @@ async def get_valid_issue_types() -> list[str]:
 
 
 async def push_to_jira(state: MeetingState) -> dict:
+    logger.info(f"[AGENT] push_to_jira — start: pushing {len(state['approved_tickets'])} tickets")
     headers = {
         "Authorization": f"Basic {_basic_auth()}",
         "Content-Type": "application/json",

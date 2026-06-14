@@ -58,8 +58,10 @@ async def validate_tickets(state: MeetingState) -> dict:
     tickets = state.get("tickets", [])
     transcript = state.get("transcript", "")
     attempts = state.get("validation_attempts", 0)
+    logger.info(f"[AGENT] validate_tickets — start: attempt {attempts + 1}, {len(tickets)} tickets")
 
     if not tickets:
+        logger.info("[AGENT] validate_tickets — no tickets, auto-passing")
         return {"validation_passed": True, "validation_attempts": attempts + 1}
 
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
@@ -100,6 +102,7 @@ async def validate_tickets(state: MeetingState) -> dict:
     ]
 
     if is_valid:
+        logger.info(f"[AGENT] validate_tickets — PASSED on attempt {attempts + 1}")
         return {
             "tickets": improved_tickets,
             "validation_passed": True,

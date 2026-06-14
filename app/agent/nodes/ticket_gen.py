@@ -55,6 +55,7 @@ Action items to convert:
 
 
 async def generate_tickets(state: MeetingState) -> dict:
+    logger.info(f"[AGENT] generate_tickets — start: {len(state['action_items'])} action items to convert")
     valid_types = await get_valid_issue_types()
     valid_set = set(valid_types)
     default_type = "Task" if "Task" in valid_set else (valid_types[0] if valid_types else "Task")
@@ -95,6 +96,7 @@ async def generate_tickets(state: MeetingState) -> dict:
                     "approved": None,
                 }
             )
+        logger.info(f"[AGENT] generate_tickets — done: {len(tickets)} tickets generated")
         return {"tickets": tickets}
     except (json.JSONDecodeError, AttributeError) as e:
         logger.error(f"Failed to parse ticket_gen response: {e}\nRaw: {response.content!r}")

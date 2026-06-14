@@ -40,6 +40,7 @@ def _clean_json(text: str) -> str:
 
 
 async def decide_ticket_creation(state: MeetingState) -> dict:
+    logger.info("[AGENT] decide_ticket_creation — start")
     transcript = state.get("transcript", "")
     action_items = state.get("action_items", [])
 
@@ -61,5 +62,6 @@ async def decide_ticket_creation(state: MeetingState) -> dict:
         should_create = True
         reason = "Decision failed — defaulting to ticket creation."
 
-    logger.info(f"Ticket creation decision: {should_create} — {reason}")
+    decision_label = "CREATE" if should_create else "SKIP"
+    logger.info(f"[AGENT] decide_ticket_creation — {decision_label}: {reason}")
     return {"should_create_tickets": should_create, "decision_reason": reason}

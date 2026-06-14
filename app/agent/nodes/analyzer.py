@@ -34,17 +34,23 @@ Now analyze this transcript:
 
 
 async def analyze_meeting(state: MeetingState) -> dict:
+    logger.info("[AGENT] analyze_meeting — start")
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
     response = await llm.ainvoke(
         [HumanMessage(content=_PROMPT.format(transcript=state["transcript"]))]
     )
     try:
         data = json.loads(_clean_json(response.content))
-        return {
+        result = {
             "meeting_type": data.get("meeting_type", "planning"),
             "topics": data.get("topics", []),
             "decisions": data.get("decisions", []),
         }
+        logger.info(
+            f"[AGENT] analyze_meeting — done: type={result['meeting_type']!r}, "
+            f"{len(result['topics'])} topics, {len(result['decisions'])} decisions"
+        )
+        return result
     except (json.JSONDecodeError, AttributeError) as e:
         logger.error(f"Failed to parse analyzer response: {e}\nRaw: {response.content!r}")
         return {"meeting_type": "planning", "topics": [], "decisions": []}
