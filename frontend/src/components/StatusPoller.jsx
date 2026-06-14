@@ -9,6 +9,7 @@ const STATUS_MESSAGES = {
   recording_succeeded: '⚙️ Processing recording...',
   completed: '⚙️ AI is analyzing your meeting...',
   agent_running: '⚙️ AI is analyzing your meeting...',
+  no_tickets_needed: '💬 Meeting analyzed — no action items detected',
 }
 
 const TICKET_BACKOFF = [10000, 15000, 20000, 30000]

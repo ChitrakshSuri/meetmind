@@ -16,3 +16,5 @@ class MeetingState(TypedDict):
     summary: str
     validation_passed: NotRequired[bool]
     validation_attempts: NotRequired[int]
+    should_create_tickets: NotRequired[bool]
+    decision_reason: NotRequired[str]

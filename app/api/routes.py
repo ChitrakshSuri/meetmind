@@ -256,6 +256,8 @@ async def _process_meeting(bot_id: str, app) -> None:
             "tickets": [],
             "approved_tickets": [],
             "summary": "",
+            "should_create_tickets": True,
+            "decision_reason": "",
         }
         config = {"configurable": {"thread_id": bot_id}}
         logger.info(f"[{bot_id}] Invoking LangGraph agent")
