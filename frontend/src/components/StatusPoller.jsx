@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getMeetingStatus, getTickets } from '../api/client'
+import { getMeetingStatus, getTickets, getSummary } from '../api/client'
 
 const STATUS_MESSAGES = {
   bot_created: '🤖 Bot is joining your meeting...',
@@ -14,8 +14,9 @@ const STATUS_MESSAGES = {
 
 const TICKET_BACKOFF = [10000, 15000, 20000, 30000]
 const MAX_TICKET_WAIT_MS = 5 * 60 * 1000
+const NO_TICKET_CHECK_MS = 2 * 60 * 1000
 
-export default function StatusPoller({ botId, onTicketsReady }) {
+export default function StatusPoller({ botId, onTicketsReady, onNoTickets }) {
   const [statusMsg, setStatusMsg] = useState('🤖 Connecting...')
   const [error, setError] = useState(null)
   const timeoutRef = useRef(null)
@@ -49,6 +50,19 @@ export default function StatusPoller({ botId, onTicketsReady }) {
             onTicketsReady(tickets)
             return
           }
+
+          // After 2 min with no tickets, check if summary exists — means
+          // decide_ticket_creation chose to skip ticket generation entirely
+          if (Date.now() - startTimeRef.current > NO_TICKET_CHECK_MS) {
+            const summaryRes = await getSummary(botId)
+            if (summaryRes.data.summary) {
+              stoppedRef.current = true
+              setStatusMsg('💬 No action items detected — meeting summarized')
+              onNoTickets()
+              return
+            }
+          }
+
           setStatusMsg('⚙️ AI is generating your tickets...')
         } catch {
           // keep going

@@ -67,6 +67,7 @@ export default function App() {
             <StatusPoller
               botId={botId}
               onTicketsReady={(t) => { setTickets(t); setStep(2) }}
+              onNoTickets={() => { setStep(3) }}
             />
           )}
           {step === 2 && (
