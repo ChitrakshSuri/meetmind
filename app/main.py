@@ -1,6 +1,13 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
+    datefmt="%H:%M:%S",
+)
+
 from app.config import settings
 
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
