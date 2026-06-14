@@ -41,4 +41,8 @@ async def generate_summary(state: MeetingState) -> dict:
         ]
     )
     summary = response.content.strip()
+    failed = state.get("jira_push_failed_tickets", [])
+    if failed:
+        failed_str = ", ".join(failed)
+        summary += f"\n\n⚠️ These tickets failed to push to Jira and need manual creation: {failed_str}"
     return {"summary": summary}

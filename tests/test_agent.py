@@ -197,11 +197,67 @@ async def test_push_to_jira_handles_api_failure_gracefully():
     with (
         patch("app.agent.nodes.jira_push.get_issue_type_map", new=AsyncMock(return_value={"Bug": "10001", "Task": "10002"})),
         patch("app.agent.nodes.jira_push.httpx.AsyncClient", return_value=mock_client),
+        patch("app.agent.nodes.jira_push.asyncio.sleep", new=AsyncMock()),
     ):
         result = await push_to_jira({"approved_tickets": approved})
 
     assert len(result["approved_tickets"]) == 2
     assert all(t["jira_key"] is None for t in result["approved_tickets"])
+
+
+async def test_push_to_jira_retries_on_failure():
+    from app.agent.nodes.jira_push import push_to_jira
+
+    fail_response = MagicMock()
+    fail_response.is_success = False
+    fail_response.status_code = 503
+    fail_response.text = "Service Unavailable"
+    fail_response.raise_for_status.side_effect = Exception("503")
+
+    success_response = MagicMock()
+    success_response.is_success = True
+    success_response.json.return_value = {"key": "PROJ-99"}
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.post.side_effect = [fail_response, fail_response, success_response]
+
+    approved = [_make_ticket("abc12345", approved=True)]
+
+    with (
+        patch("app.agent.nodes.jira_push.get_issue_type_map", new=AsyncMock(return_value={"Bug": "10001", "Task": "10002"})),
+        patch("app.agent.nodes.jira_push.httpx.AsyncClient", return_value=mock_client),
+        patch("app.agent.nodes.jira_push.asyncio.sleep", new=AsyncMock()),
+    ):
+        result = await push_to_jira({"approved_tickets": approved})
+
+    assert result["approved_tickets"][0]["jira_key"] == "PROJ-99"
+    assert not result["approved_tickets"][0].get("push_failed")
+    assert result["jira_push_failed_tickets"] == []
+
+
+async def test_push_to_jira_marks_failed_after_max_retries():
+    from app.agent.nodes.jira_push import push_to_jira
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.post.side_effect = Exception("Connection refused")
+
+    approved = [_make_ticket("abc12345", approved=True)]
+    mock_sleep = AsyncMock()
+
+    with (
+        patch("app.agent.nodes.jira_push.get_issue_type_map", new=AsyncMock(return_value={"Bug": "10001", "Task": "10002"})),
+        patch("app.agent.nodes.jira_push.httpx.AsyncClient", return_value=mock_client),
+        patch("app.agent.nodes.jira_push.asyncio.sleep", new=mock_sleep),
+    ):
+        result = await push_to_jira({"approved_tickets": approved})
+
+    assert result["approved_tickets"][0]["jira_key"] is None
+    assert result["approved_tickets"][0]["push_failed"] is True
+    assert "Fix login bug" in result["jira_push_failed_tickets"]
+    sleep_calls = [call.args[0] for call in mock_sleep.call_args_list]
+    assert sleep_calls == [5, 15]
 
 
 # ── summarizer ────────────────────────────────────────────────────────────────

@@ -18,3 +18,4 @@ class MeetingState(TypedDict):
     validation_attempts: NotRequired[int]
     should_create_tickets: NotRequired[bool]
     decision_reason: NotRequired[str]
+    jira_push_failed_tickets: NotRequired[list[str]]

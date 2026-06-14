@@ -1,8 +1,12 @@
+import asyncio
 import base64
 import logging
 import httpx
 from app.agent.state import MeetingState
 from app.config import settings
+
+MAX_RETRIES = 3
+BACKOFF_SECONDS = [5, 15, 30]
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +65,8 @@ async def push_to_jira(state: MeetingState) -> dict:
     task_id = issue_type_map.get("Task")
 
     results = []
+    failed_titles: list[str] = []
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         for ticket in state["approved_tickets"]:
             resolved_id = issue_type_map.get(ticket["ticket_type"], task_id)
@@ -85,20 +91,33 @@ async def push_to_jira(state: MeetingState) -> dict:
             if ticket.get("sprint_id"):
                 payload["fields"]["customfield_10020"] = ticket["sprint_id"]
 
-            try:
-                response = await client.post(
-                    f"{settings.atlassian_base_url}/rest/api/3/issue",
-                    headers=headers,
-                    json=payload,
-                )
-                if not response.is_success:
-                    logger.error(f"Jira API error {response.status_code}: {response.text}")
-                    response.raise_for_status()
-                jira_key = response.json()["key"]
-                logger.info(f"Created Jira ticket {jira_key} for '{ticket['title']}'")
-                results.append({**ticket, "jira_key": jira_key})
-            except Exception as e:
-                logger.error(f"Failed to create Jira ticket for '{ticket.get('title')}': {e}")
-                results.append({**ticket, "jira_key": None})
+            for attempt in range(MAX_RETRIES):
+                try:
+                    response = await client.post(
+                        f"{settings.atlassian_base_url}/rest/api/3/issue",
+                        headers=headers,
+                        json=payload,
+                    )
+                    if not response.is_success:
+                        logger.error(f"Jira API error {response.status_code}: {response.text}")
+                        response.raise_for_status()
+                    jira_key = response.json()["key"]
+                    logger.info(f"Created Jira ticket {jira_key} for '{ticket['title']}'")
+                    results.append({**ticket, "jira_key": jira_key})
+                    break
+                except Exception as e:
+                    if attempt < MAX_RETRIES - 1:
+                        wait = BACKOFF_SECONDS[attempt]
+                        logger.warning(
+                            f"Attempt {attempt + 1}/{MAX_RETRIES} failed for "
+                            f"'{ticket['title']}' — retrying in {wait}s: {e}"
+                        )
+                        await asyncio.sleep(wait)
+                    else:
+                        logger.error(
+                            f"All {MAX_RETRIES} attempts failed for '{ticket['title']}': {e}"
+                        )
+                        results.append({**ticket, "jira_key": None, "push_failed": True})
+                        failed_titles.append(ticket["title"])
 
-    return {"approved_tickets": results}
+    return {"approved_tickets": results, "jira_push_failed_tickets": failed_titles}
