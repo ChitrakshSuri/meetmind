@@ -14,7 +14,6 @@ const STATUS_MESSAGES = {
 
 const TICKET_BACKOFF = [10000, 15000, 20000, 30000]
 const MAX_TICKET_WAIT_MS = 5 * 60 * 1000
-const NO_TICKET_CHECK_MS = 2 * 60 * 1000
 
 export default function StatusPoller({ botId, onTicketsReady, onNoTickets }) {
   const [statusMsg, setStatusMsg] = useState('🤖 Connecting...')
@@ -51,16 +50,18 @@ export default function StatusPoller({ botId, onTicketsReady, onNoTickets }) {
             return
           }
 
-          // After 2 min with no tickets, check if summary exists — means
-          // decide_ticket_creation chose to skip ticket generation entirely
-          if (Date.now() - startTimeRef.current > NO_TICKET_CHECK_MS) {
+          // Check if summary already exists — means decide_ticket_creation
+          // skipped ticket generation entirely and the pipeline is done
+          try {
             const summaryRes = await getSummary(botId)
-            if (summaryRes.data.summary) {
+            if (summaryRes.data.summary && summaryRes.data.summary.length > 0) {
               stoppedRef.current = true
-              setStatusMsg('💬 No action items detected — meeting summarized')
+              setStatusMsg('💬 No action items detected — generating summary...')
               onNoTickets()
               return
             }
+          } catch {
+            // summary not ready yet, keep polling tickets
           }
 
           setStatusMsg('⚙️ AI is generating your tickets...')
