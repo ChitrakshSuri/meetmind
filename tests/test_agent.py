@@ -79,7 +79,10 @@ async def test_generate_tickets_creates_correct_structure():
     payload = '{"tickets": [{"title": "Fix login", "description": "desc", "ticket_type": "Bug", "priority": "High", "assignee": "Alice"}]}'
     action_items = [{"description": "Fix login", "assignee": "Alice", "due_hint": None}]
 
-    with patch("app.agent.nodes.ticket_gen.ChatOpenAI", return_value=_mock_llm(payload)):
+    with (
+        patch("app.agent.nodes.ticket_gen.ChatOpenAI", return_value=_mock_llm(payload)),
+        patch("app.agent.nodes.ticket_gen.get_valid_issue_types", new=AsyncMock(return_value=["Bug", "Task"])),
+    ):
         result = await generate_tickets({"action_items": action_items})
 
     tickets = result["tickets"]
@@ -95,7 +98,10 @@ async def test_generate_tickets_creates_correct_structure():
 async def test_generate_tickets_handles_bad_json():
     from app.agent.nodes.ticket_gen import generate_tickets
 
-    with patch("app.agent.nodes.ticket_gen.ChatOpenAI", return_value=_mock_llm("bad")):
+    with (
+        patch("app.agent.nodes.ticket_gen.ChatOpenAI", return_value=_mock_llm("bad")),
+        patch("app.agent.nodes.ticket_gen.get_valid_issue_types", new=AsyncMock(return_value=["Bug", "Task"])),
+    ):
         result = await generate_tickets({"action_items": []})
 
     assert result["tickets"] == []
@@ -152,7 +158,7 @@ async def test_push_to_jira_sets_jira_key():
     from app.agent.nodes.jira_push import push_to_jira
 
     mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()
+    mock_response.is_success = True
     mock_response.json.return_value = {"key": "PROJ-42"}
 
     mock_client = AsyncMock()
@@ -161,7 +167,10 @@ async def test_push_to_jira_sets_jira_key():
 
     approved = [_make_ticket("abc12345", approved=True)]
 
-    with patch("app.agent.nodes.jira_push.httpx.AsyncClient", return_value=mock_client):
+    with (
+        patch("app.agent.nodes.jira_push.get_issue_type_map", new=AsyncMock(return_value={"Bug": "10001", "Task": "10002"})),
+        patch("app.agent.nodes.jira_push.httpx.AsyncClient", return_value=mock_client),
+    ):
         result = await push_to_jira({"approved_tickets": approved})
 
     assert result["approved_tickets"][0]["jira_key"] == "PROJ-42"
@@ -171,6 +180,9 @@ async def test_push_to_jira_handles_api_failure_gracefully():
     from app.agent.nodes.jira_push import push_to_jira
 
     mock_response = MagicMock()
+    mock_response.is_success = False
+    mock_response.status_code = 500
+    mock_response.text = "Internal Server Error"
     mock_response.raise_for_status.side_effect = Exception("500 Server Error")
 
     mock_client = AsyncMock()
@@ -182,7 +194,10 @@ async def test_push_to_jira_handles_api_failure_gracefully():
         _make_ticket("bbb22222", approved=True),
     ]
 
-    with patch("app.agent.nodes.jira_push.httpx.AsyncClient", return_value=mock_client):
+    with (
+        patch("app.agent.nodes.jira_push.get_issue_type_map", new=AsyncMock(return_value={"Bug": "10001", "Task": "10002"})),
+        patch("app.agent.nodes.jira_push.httpx.AsyncClient", return_value=mock_client),
+    ):
         result = await push_to_jira({"approved_tickets": approved})
 
     assert len(result["approved_tickets"]) == 2
