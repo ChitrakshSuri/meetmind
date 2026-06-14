@@ -185,6 +185,11 @@ async def get_jira_metadata():
 
 @router.post("/webhook/meetingbaas")
 async def meetingbaas_webhook(payload: dict, request: Request):
+    if settings.webhook_secret:
+        incoming = request.headers.get("x-meetingbaas-signature", "")
+        if incoming != settings.webhook_secret:
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     bot_id = payload.get("bot_id") or payload.get("data", {}).get("bot_id")
     event = payload.get("event", "")
     status = "completed" if event == "bot.completed" else payload.get("status") or payload.get("data", {}).get("status")
@@ -201,6 +206,13 @@ async def meetingbaas_webhook(payload: dict, request: Request):
 
 async def _process_meeting(bot_id: str, app) -> None:
     try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Meeting).where(Meeting.bot_id == bot_id))
+            existing = result.scalar_one_or_none()
+            if existing and existing.status not in ("processing", "failed", "agent_running"):
+                logger.info(f"[{bot_id}] Already processed (status={existing.status}), skipping duplicate webhook")
+                return
+
         logger.info(f"[{bot_id}] Fetching meeting data from MeetingBaaS")
         meeting_data = await get_meeting_data(bot_id)
         meeting_url = meeting_data.get("meeting_url", "")
@@ -263,6 +275,17 @@ async def _process_meeting(bot_id: str, app) -> None:
         config = {"configurable": {"thread_id": bot_id}}
         logger.info(f"[{bot_id}] Invoking LangGraph agent")
         await graph.ainvoke(initial_state, config=config)
-        logger.info(f"[{bot_id}] Agent paused at human_review — awaiting approval")
+        final_state = await graph.aget_state(config)
+        if not final_state.next:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(Meeting).where(Meeting.bot_id == bot_id))
+                meeting = result.scalar_one_or_none()
+                if meeting:
+                    meeting.status = "completed"
+                    meeting.summary = final_state.values.get("summary", "")
+                    await db.commit()
+            logger.info(f"[{bot_id}] Agent completed (no-ticket path)")
+        else:
+            logger.info(f"[{bot_id}] Agent paused at {final_state.next[0]} — awaiting approval")
     except Exception as e:
         logger.error(f"[{bot_id}] Failed to process meeting: {e}\n{traceback.format_exc()}")

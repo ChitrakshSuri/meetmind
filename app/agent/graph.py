@@ -51,4 +51,4 @@ def build_graph(checkpointer: BaseCheckpointSaver):
 
 
 def get_graph(app):
-    return app.state.graph
+    return getattr(app.state, "graph", None)

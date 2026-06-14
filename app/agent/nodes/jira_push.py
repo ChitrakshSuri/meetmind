@@ -81,8 +81,6 @@ async def push_to_jira(state: MeetingState) -> dict:
             }
             if ticket.get("assignee_account_id"):
                 payload["fields"]["assignee"] = {"id": ticket["assignee_account_id"]}
-            elif ticket.get("assignee") and ticket["assignee"] != "Unassigned":
-                payload["fields"]["assignee"] = {"name": ticket["assignee"]}
             if ticket.get("due_date"):
                 payload["fields"]["duedate"] = ticket["due_date"]
             if ticket.get("labels"):

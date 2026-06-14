@@ -9,9 +9,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://meetmind:meetmind@postgres:5432/meetmind
+      DATABASE_URL: postgresql+asyncpg://meetmind:${POSTGRES_PASSWORD:-meetmind}@postgres:5432/meetmind
+    # DEV ONLY: remove this volume mount for production deployments
     volumes:
       - .:/app
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
@@ -25,9 +27,7 @@ services:
     environment:
       POSTGRES_DB: meetmind
       POSTGRES_USER: meetmind
-      POSTGRES_PASSWORD: meetmind
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meetmind}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -35,6 +35,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
 volumes:
   postgres_data:

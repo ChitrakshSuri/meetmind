@@ -108,7 +108,7 @@ export default function Summary({ botId, ticketsPushed }) {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {ticketsPushed && (
             <a
-              href="https://chitrakshsworkspace-40359508.atlassian.net/jira/software/projects/KAN/boards/1"
+              href={import.meta.env.VITE_JIRA_BOARD_URL || "#"}
               target="_blank"
               rel="noreferrer"
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-2.5 transition-colors text-sm inline-flex items-center justify-center gap-1.5"
