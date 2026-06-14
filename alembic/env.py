@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -16,8 +17,14 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def get_url() -> str:
+    """Read DATABASE_URL from environment, converting asyncpg to psycopg for Alembic."""
+    url = os.environ.get("DATABASE_URL", "")
+    return url.replace("postgresql+asyncpg://", "postgresql+psycopg://")
+
+
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+    url = get_url() or config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -46,6 +53,7 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
+    config.set_main_option("sqlalchemy.url", get_url())
     asyncio.run(run_async_migrations())
 
 
