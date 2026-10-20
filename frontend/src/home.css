@@ -1,0 +1,154 @@
+/*
+ * MeetMind home page.
+ * A louder, sticker-style face for the product: deep green ground, one lime accent,
+ * cream cards and a drawn mascot. Scoped to .home so the app screens keep their calm chrome.
+ */
+.home {
+  --h-ground: #123a27;
+  --h-deep: #0c2a1b;
+  --h-lime: #d6f77f;
+  --h-cream: #fbf5d9;
+  --h-ink: #0d1a12;
+  --h-orange: #ff9a3c;
+  --h-text: #f3f7e6;
+  --h-muted: #b9ccb4;
+  background: var(--h-ground);
+  color: var(--h-text);
+  font-family: 'Geist Variable', system-ui, sans-serif;
+  overflow-x: clip;
+}
+
+.home .display {
+  font-family: 'Bricolage Grotesque Variable', 'Geist Variable', system-ui, sans-serif;
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.home :focus-visible {
+  outline: 3px solid var(--h-lime);
+  outline-offset: 3px;
+}
+.home .on-cream :focus-visible,
+.home .on-lime :focus-visible {
+  outline-color: var(--h-ink);
+}
+
+/* Buttons: chunky, flat, one radius family (full pill). */
+.h-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0 1.5rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 120ms ease, color 120ms ease;
+}
+.h-btn:active {
+  transform: scale(0.97);
+}
+.h-btn-lime {
+  background: var(--h-lime);
+  color: var(--h-ink);
+}
+.h-btn-ink {
+  background: var(--h-ink);
+  color: var(--h-lime);
+}
+.h-btn-ghost {
+  color: var(--h-text);
+}
+@media (hover: hover) and (pointer: fine) {
+  .h-btn-lime:hover {
+    background: #e6ffa0;
+  }
+  .h-btn-ink:hover {
+    background: #1d3326;
+  }
+  .h-btn-ghost:hover {
+    color: var(--h-lime);
+  }
+}
+
+/* Mascot motion */
+@keyframes h-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(1.5deg);
+  }
+}
+@keyframes h-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) rotate(4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(4deg);
+  }
+}
+@keyframes h-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes h-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.h-bob {
+  animation: h-bob 4.2s ease-in-out infinite;
+  transform-origin: 50% 90%;
+}
+.h-pop {
+  animation: h-pop 420ms cubic-bezier(0.23, 1, 0.32, 1) 700ms both;
+}
+.h-spin-slow {
+  animation: h-spin 60s linear infinite;
+}
+.h-marquee {
+  animation: h-slide 28s linear infinite;
+}
+
+/* Scroll entrances: hidden only once JS has marked the root, so no-JS still reads. */
+.home.js-reveal .reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 520ms cubic-bezier(0.23, 1, 0.32, 1), transform 520ms cubic-bezier(0.23, 1, 0.32, 1);
+  transition-delay: var(--d, 0ms);
+}
+.home.js-reveal .reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .h-bob,
+  .h-spin-slow,
+  .h-marquee {
+    animation: none;
+  }
+  .h-pop {
+    animation: none;
+    transform: rotate(4deg);
+  }
+  .home.js-reveal .reveal {
+    transform: none;
+    transition-property: opacity;
+  }
+  .h-btn:active {
+    transform: none;
+  }
+}

@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { startMeeting } from '../api/client'
+import { Spinner, AlertIcon } from './ui'
 
-function Spinner() {
-  return (
-    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-    </svg>
-  )
-}
+const HOW_IT_WORKS = [
+  { title: 'The bot joins the call', body: 'MeetMind enters your Google Meet or Zoom call under the name you choose.' },
+  { title: 'It records and transcribes', body: 'Leave the call running. This page tracks each stage as it happens.' },
+  { title: 'You review the drafts', body: 'Edit, approve or skip every ticket. Nothing reaches Jira until you confirm.' },
+]
 
 export default function MeetingInput({ onStarted }) {
   const [url, setUrl] = useState('')
@@ -32,52 +30,86 @@ export default function MeetingInput({ onStarted }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-md p-8">
-      <h2 className="text-2xl font-bold text-gray-800 mb-1">Start a Meeting</h2>
-      <p className="text-gray-500 text-sm mb-6">
-        Paste your Google Meet or Zoom link and MeetMind will join, record, and process it automatically.
+    <div>
+      <h1 className="text-2xl font-semibold tracking-[-0.02em]">New Meeting</h1>
+      <p className="mt-1 max-w-[60ch] text-[15px] text-muted">
+        Paste a Google Meet or Zoom link. MeetMind joins, records and turns the discussion into Jira tickets.
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Meeting URL</label>
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://meet.google.com/abc-defg-hij"
-            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Bot Name <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <input
-            type="text"
-            value={botName}
-            onChange={(e) => setBotName(e.target.value)}
-            placeholder="MeetMind AI"
-            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-            {error}
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <form onSubmit={handleSubmit} className="panel p-6">
+          <div>
+            <label htmlFor="meeting-url" className="field-label">
+              Meeting URL
+            </label>
+            <input
+              id="meeting-url"
+              name="meeting_url"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://meet.google.com/abc-defg-hij…"
+              className="field"
+              aria-invalid={error ? 'true' : undefined}
+              aria-describedby={error ? 'start-error' : undefined}
+              required
+            />
           </div>
-        )}
 
-        <button
-          type="submit"
-          disabled={loading || !url.trim()}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold rounded-lg px-6 py-3 flex items-center justify-center gap-2 transition-colors"
-        >
-          {loading ? <><Spinner /> Sending bot...</> : 'Start MeetMind'}
-        </button>
-      </form>
+          <div className="mt-4">
+            <label htmlFor="bot-name" className="field-label">
+              Bot Name <span className="font-normal text-muted">(optional)</span>
+            </label>
+            <input
+              id="bot-name"
+              name="bot_name"
+              type="text"
+              autoComplete="off"
+              value={botName}
+              onChange={(e) => setBotName(e.target.value)}
+              placeholder="MeetMind AI…"
+              className="field"
+            />
+            <p className="mt-2 text-xs text-muted">Shown to everyone in the call as the participant name.</p>
+          </div>
+
+          {error && (
+            <div
+              id="start-error"
+              role="alert"
+              className="mt-4 flex items-start gap-2 rounded-control border border-[#f3c9c6] bg-[#ffedea] px-3 py-2.5 text-[13px] text-[#831c1e]"
+            >
+              <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button type="submit" disabled={loading || !url.trim()} className="btn btn-primary mt-6 w-full sm:w-auto">
+            {loading ? (
+              <>
+                <Spinner /> Sending Bot…
+              </>
+            ) : (
+              'Send Bot to Meeting'
+            )}
+          </button>
+        </form>
+
+        <aside aria-label="What happens next">
+          <h2 className="text-base font-semibold">What Happens Next</h2>
+          <ul className="mt-3 space-y-4">
+            {HOW_IT_WORKS.map((item) => (
+              <li key={item.title} className="border-l-2 border-control pl-4">
+                <p className="font-medium">{item.title}</p>
+                <p className="mt-0.5 text-[13px] text-muted">{item.body}</p>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </div>
     </div>
   )
 }

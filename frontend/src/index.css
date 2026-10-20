@@ -1,3 +1,215 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * MeetMind design tokens.
+ * Quiet, achromatic chrome: ink and a blue-grey ground. The one hue (--signal)
+ * marks live data only: the current pipeline stage and the approved count.
+ */
+:root {
+  --ground: #f2f4f7;
+  --surface: #ffffff;
+  --raised: #eceef2;
+  --border: #e1e4e9;
+  --rule: #eef0f3;
+  --control: #cfd3da;
+  --text: #0a0a0a;
+  --muted: #5f6672;
+  --primary: #141414;
+  --signal: #1d5fbf;
+  --positive: #247b50;
+  --negative: #c4242a;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-ground font-sans text-sm text-ink antialiased;
+    line-height: 1.5;
+    touch-action: manipulation;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: #cfe0f7;
+  }
+}
+
+@layer components {
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Controls: one height (36px), one radius (6px). */
+  .btn {
+    @apply inline-flex h-9 select-none items-center justify-center gap-2 whitespace-nowrap rounded-control px-4 text-sm font-medium;
+    transition: transform 160ms var(--ease-out), background-color 120ms ease, border-color 120ms ease,
+      color 120ms ease, opacity 120ms ease;
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-primary text-white;
+  }
+  .btn-primary:disabled {
+    @apply bg-control text-[#4b5058];
+  }
+  .btn-secondary {
+    @apply border border-control bg-surface text-ink;
+  }
+  .btn-ghost {
+    @apply px-2 text-muted;
+  }
+  .btn-danger {
+    @apply px-2 text-negative;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-primary:hover:not(:disabled) {
+      background: #2e2e2e;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      @apply border-[#9aa0aa] bg-raised;
+    }
+    .btn-ghost:hover:not(:disabled) {
+      @apply bg-raised text-ink;
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: #ffedea;
+    }
+  }
+
+  .field-label {
+    @apply mb-2 block text-sm font-medium text-ink;
+  }
+  .field {
+    @apply h-9 w-full rounded-control border border-control bg-surface px-3 text-sm text-ink;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  textarea.field {
+    @apply h-auto py-2;
+  }
+  .field::placeholder {
+    color: #6b7280;
+  }
+  .field:focus-visible {
+    @apply border-signal;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(29, 95, 191, 0.18);
+  }
+  .field[aria-invalid='true'] {
+    @apply border-negative;
+  }
+
+  .panel {
+    @apply rounded-card border border-line bg-surface;
+  }
+
+  .chip {
+    @apply inline-flex h-5 items-center whitespace-nowrap rounded-[4px] bg-raised px-1.5 text-xs font-medium text-[#3d3d3d];
+  }
+
+  .skeleton {
+    @apply rounded-[4px] bg-raised;
+  }
+}
+
+/* Motion: transform and opacity only; reduced-motion keeps the fade and drops the travel. */
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@keyframes live-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.screen-in {
+  animation: screen-in 240ms var(--ease-out) backwards;
+}
+.fade-in {
+  animation: fade-in 180ms ease-out both;
+}
+.drawer-in {
+  animation: drawer-in 220ms var(--ease-out) both;
+}
+.toast-in {
+  animation: toast-in 200ms var(--ease-out) both;
+}
+.live-ring {
+  animation: live-pulse 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-in,
+  .toast-in {
+    animation-name: fade-in;
+  }
+  .drawer-in {
+    animation-name: fade-in;
+  }
+  .live-ring {
+    animation: none;
+    opacity: 0;
+  }
+  .btn {
+    transition-property: background-color, border-color, color, opacity;
+  }
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}

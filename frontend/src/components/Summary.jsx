@@ -1,129 +1,88 @@
 import { useEffect, useState } from 'react'
 import { getSummary } from '../api/client'
+import { CheckIcon, ExternalIcon, AlertIcon } from './ui'
 
-const CONFETTI_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6']
-
-function Confetti() {
-  const pieces = Array.from({ length: 36 }, (_, i) => ({
-    id: i,
-    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-    left: Math.random() * 100,
-    delay: Math.random() * 1.5,
-    size: 6 + Math.random() * 6,
-    duration: 2.5 + Math.random() * 1.5,
-  }))
-
+function SummarySkeleton() {
   return (
-    <div className="pointer-events-none fixed inset-0 overflow-hidden z-50">
-      <style>{`
-        @keyframes confetti-fall {
-          0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
-          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
-        }
-        .confetti-piece {
-          position: absolute;
-          top: 0;
-          border-radius: 2px;
-          animation-name: confetti-fall;
-          animation-timing-function: linear;
-          animation-fill-mode: forwards;
-        }
-      `}</style>
-      {pieces.map((p) => (
-        <div
-          key={p.id}
-          className="confetti-piece"
-          style={{
-            left: `${p.left}%`,
-            width: p.size,
-            height: p.size,
-            backgroundColor: p.color,
-            animationDelay: `${p.delay}s`,
-            animationDuration: `${p.duration}s`,
-          }}
-        />
-      ))}
+    <div className="space-y-3" role="status" aria-label="Loading summary">
+      <div className="skeleton h-4 w-11/12" />
+      <div className="skeleton h-4 w-full" />
+      <div className="skeleton h-4 w-9/12" />
+      <div className="skeleton h-4 w-10/12" />
     </div>
   )
 }
 
-function Spinner() {
-  return (
-    <svg className="animate-spin h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-    </svg>
-  )
-}
-
-export default function Summary({ botId, ticketsPushed }) {
+export default function Summary({ botId, ticketsPushed, pushedCount = 0 }) {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showConfetti, setShowConfetti] = useState(ticketsPushed)
 
   useEffect(() => {
     getSummary(botId)
       .then((res) => setSummary(res.data.summary))
       .catch((err) => setError(err.response?.data?.detail || err.message || 'Failed to load summary'))
       .finally(() => setLoading(false))
+  }, [botId])
 
-    if (!ticketsPushed) return
-    const timer = setTimeout(() => setShowConfetti(false), 4000)
-    return () => clearTimeout(timer)
-  }, [botId, ticketsPushed])
+  const jiraUrl = import.meta.env.VITE_JIRA_BOARD_URL || '#'
 
   return (
-    <>
-      {showConfetti && <Confetti />}
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">Meeting Processed</h1>
+          <p className="mt-1 flex items-center gap-1.5 text-[15px] text-muted">
+            {ticketsPushed ? (
+              <>
+                <CheckIcon className="h-4 w-4 shrink-0 text-positive" />
+                <span>
+                  <span className="num font-medium text-ink">{pushedCount}</span>{' '}
+                  {pushedCount === 1 ? 'ticket' : 'tickets'} pushed to Jira.
+                </span>
+              </>
+            ) : (
+              'No tickets were pushed to Jira.'
+            )}
+          </p>
+        </div>
 
-      <div className="bg-white rounded-2xl shadow-md p-8 text-center">
-        <div className="text-5xl mb-3">{ticketsPushed ? '🎉' : '✅'}</div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-1">All done!</h2>
-        <p className="text-gray-500 text-sm mb-6">
-          {ticketsPushed
-            ? '✅ Your tickets have been pushed to Jira successfully.'
-            : 'Meeting processed. No tickets were pushed to Jira.'}
-        </p>
-
-        {loading && (
-          <div className="flex justify-center py-4">
-            <Spinner />
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4 text-left">
-            {error}
-          </div>
-        )}
-
-        {summary && (
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-left text-sm text-gray-700 leading-relaxed mb-6 whitespace-pre-wrap">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Meeting Summary</p>
-            {summary}
-          </div>
-        )}
-
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="flex flex-col gap-2 sm:flex-row">
           {ticketsPushed && (
-            <a
-              href={import.meta.env.VITE_JIRA_BOARD_URL || "#"}
-              target="_blank"
-              rel="noreferrer"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-2.5 transition-colors text-sm inline-flex items-center justify-center gap-1.5"
-            >
-              View Jira Board →
+            <a href={jiraUrl} target="_blank" rel="noreferrer" className="btn btn-primary">
+              View Jira Board
+              <ExternalIcon className="h-4 w-4" />
             </a>
           )}
-          <button
-            onClick={() => window.location.reload()}
-            className="border border-gray-300 hover:border-gray-400 text-gray-700 font-semibold rounded-lg px-6 py-2.5 transition-colors text-sm"
-          >
+          <button type="button" onClick={() => window.location.reload()} className="btn btn-secondary">
             Start New Meeting
           </button>
         </div>
       </div>
-    </>
+
+      <section className="panel mt-8 p-6" aria-labelledby="summary-heading">
+        <h2 id="summary-heading" className="text-base font-semibold">
+          Meeting Summary
+        </h2>
+
+        <div className="mt-4">
+          {loading && <SummarySkeleton />}
+
+          {error && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-control border border-[#f3c9c6] bg-[#ffedea] px-3 py-2.5 text-[13px] text-[#831c1e]"
+            >
+              <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {summary && <p className="max-w-[68ch] whitespace-pre-wrap break-words text-[15px] leading-[1.7]">{summary}</p>}
+
+          {!loading && !error && !summary && <p className="text-muted">No summary was generated for this meeting.</p>}
+        </div>
+      </section>
+    </div>
   )
 }
